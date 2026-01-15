@@ -187,6 +187,150 @@ def send_test_notification(token: str, user: str) -> bool:
         return False
 
 
+def test_chinese_encoding(token: str, user: str) -> bool:
+    """Test Chinese character encoding in notifications."""
+    print_header("Step 3b: Testing Chinese Character Encoding")
+
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    title = "编码测试 (Encoding Test)"
+    message = f"中文测试：你来测试最新开发的 rustdesk 服务器协议的扫描功能\\nTime: {timestamp}\\nIP: 116.62.8.4"
+
+    print_info(f"Title: {title}")
+    print_info(f"Message: {message}")
+    print_info(f"Expected: Chinese characters should display correctly")
+
+    response_file = Path("pushover_response_chinese.txt")
+
+    try:
+        cmd = [
+            "curl",
+            "-s",
+            "-o", str(response_file),
+            "-w", "%{http_code}",
+            "https://api.pushover.net/1/messages.json",
+            "--data-urlencode", f"token={token}",
+            "--data-urlencode", f"user={user}",
+            "--data-urlencode", f"title={title}",
+            "--data-urlencode", f"message={message}",
+            "-d", "priority=0",
+        ]
+
+        print_info("Sending test notification with Chinese characters...")
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+
+        http_code = result.stdout.strip()
+        print_info(f"HTTP Status Code: {http_code}")
+
+        if response_file.exists():
+            response_body = response_file.read_text(encoding="utf-8")
+            response_file.unlink()
+            print_info(f"Response body: {response_body}")
+
+            try:
+                response_json = json.loads(response_body)
+                if response_json.get("status") == 1:
+                    print_success("Chinese encoding test passed!")
+                    print_info("Please verify on your device that characters display correctly")
+                    return True
+                else:
+                    print_error("Notification failed")
+                    if "errors" in response_json:
+                        for error in response_json["errors"]:
+                            print_error(f"API Error: {error}")
+                    return False
+            except json.JSONDecodeError:
+                print_warning("Could not parse response as JSON")
+        else:
+            print_warning("No response body captured")
+
+        if http_code == "200":
+            print_success("Notification sent (HTTP 200)")
+            return True
+        else:
+            print_error(f"Unexpected HTTP code: {http_code}")
+            return False
+
+    except subprocess.TimeoutExpired:
+        print_error("Request timed out")
+        response_file.unlink(missing_ok=True)
+        return False
+    except Exception as e:
+        print_error(f"Exception: {e}")
+        response_file.unlink(missing_ok=True)
+        return False
+
+
+def test_empty_notification_body(token: str, user: str) -> bool:
+    """Test empty notification body handling."""
+    print_header("Step 3c: Testing Empty Notification Body")
+
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    title = "Empty Body Test"
+    message = f"Session: test-session-{timestamp}\\nType: test_notification\\nNo additional details provided"
+
+    print_info(f"Title: {title}")
+    print_info(f"Message: {message}")
+    print_info("Expected: Should NOT show literal '{}'")
+
+    response_file = Path("pushover_response_empty.txt")
+
+    try:
+        cmd = [
+            "curl",
+            "-s",
+            "-o", str(response_file),
+            "-w", "%{http_code}",
+            "https://api.pushover.net/1/messages.json",
+            "--data-urlencode", f"token={token}",
+            "--data-urlencode", f"user={user}",
+            "--data-urlencode", f"title={title}",
+            "--data-urlencode", f"message={message}",
+            "-d", "priority=0",
+        ]
+
+        print_info("Sending test notification simulating empty body...")
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+
+        http_code = result.stdout.strip()
+        print_info(f"HTTP Status Code: {http_code}")
+
+        if response_file.exists():
+            response_body = response_file.read_text(encoding="utf-8")
+            response_file.unlink()
+
+            try:
+                response_json = json.loads(response_body)
+                if response_json.get("status") == 1:
+                    print_success("Empty body test passed!")
+                    return True
+                else:
+                    print_error("Notification failed")
+                    if "errors" in response_json:
+                        for error in response_json["errors"]:
+                            print_error(f"API Error: {error}")
+                    return False
+            except json.JSONDecodeError:
+                print_warning("Could not parse response as JSON")
+        else:
+            print_warning("No response body captured")
+
+        if http_code == "200":
+            print_success("Notification sent (HTTP 200)")
+            return True
+        else:
+            print_error(f"Unexpected HTTP code: {http_code}")
+            return False
+
+    except subprocess.TimeoutExpired:
+        print_error("Request timed out")
+        response_file.unlink(missing_ok=True)
+        return False
+    except Exception as e:
+        print_error(f"Exception: {e}")
+        response_file.unlink(missing_ok=True)
+        return False
+
+
 def show_hook_config() -> None:
     """Show current hook configuration."""
     print_header("Step 4: Hook Configuration")
@@ -272,6 +416,16 @@ def main() -> None:
     # Send test notification
     notification_ok = send_test_notification(env_results["token"], env_results["user"])
     print()
+
+    # Additional encoding tests
+    if notification_ok:
+        chinese_ok = test_chinese_encoding(env_results["token"], env_results["user"])
+        print()
+        empty_ok = test_empty_notification_body(env_results["token"], env_results["user"])
+        print()
+
+        # Update final result
+        notification_ok = chinese_ok and empty_ok
 
     # Show configuration
     show_hook_config()
