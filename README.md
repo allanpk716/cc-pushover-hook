@@ -56,6 +56,24 @@ echo 'export PUSHOVER_USER="your_user_key_here"' >> ~/.bashrc
 
 ### 3. 安装 Hook
 
+#### 方法一：使用自动安装脚本（推荐）
+
+在项目根目录运行安装脚本：
+
+```bash
+python install.py
+```
+
+安装脚本会：
+- 自动检测你的操作系统（Windows/Linux/macOS）
+- 询问目标项目路径
+- 复制所有必要文件
+- 生成适合你系统的 settings.json
+- 引导你完成环境变量设置
+- 运行诊断验证安装
+
+#### 方法二：手动安装
+
 将以下文件复制到你的项目目录：
 
 ```bash
@@ -68,7 +86,10 @@ cp -r .claude /path/to/your/project/
 your-project/
 ├── .claude/
 │   ├── hooks/
-│   │   └── pushover-notify.py
+│   │   ├── pushover-notify.py
+│   │   ├── test-pushover.py
+│   │   ├── diagnose.py
+│   │   └── README.md
 │   ├── cache/
 │   └── settings.json
 └── README.md
@@ -77,10 +98,24 @@ your-project/
 ### 4. 设置执行权限（Linux/macOS）
 
 ```bash
-chmod +x .claude/hooks/pushover-notify.py
+chmod +x .claude/hooks/*.py
 ```
 
 ### 5. 验证安装
+
+**运行诊断脚本：**
+
+```bash
+python .claude/hooks/diagnose.py
+```
+
+**发送测试通知：**
+
+```bash
+python .claude/hooks/test-pushover.py
+```
+
+### 6. 手动测试（可选）
 
 手动测试 hook 是否正常工作：
 
@@ -168,7 +203,19 @@ Run command: npm install
 
 ### 没有收到通知
 
-**检查清单：**
+**使用诊断脚本快速排查：**
+
+```bash
+python .claude/hooks/diagnose.py
+```
+
+诊断脚本会检查：
+- 环境变量是否设置
+- Python 是否可用
+- Hook 脚本是否存在
+- Settings 配置是否正确
+
+**手动检查清单：**
 
 1. **环境变量是否正确设置**
    ```bash
@@ -181,21 +228,23 @@ Run command: npm install
    echo $PUSHOVER_USER
    ```
 
-2. **Token 和 User Key 是否有效**
+2. **发送测试通知**
+   ```bash
+   python .claude/hooks/test-pushover.py
+   ```
+
+3. **查看调试日志**
+   ```bash
+   cat .claude/hooks/debug.log
+   ```
+
+4. **Token 和 User Key 是否有效**
    - 登录 Pushover.net 确认凭证
    - 尝试重新生成凭证
 
-3. **网络连接是否正常**
+5. **网络连接是否正常**
    ```bash
    curl -I https://api.pushover.net
-   ```
-
-4. **hook 脚本是否可执行**
-   ```bash
-   # Linux/macOS
-   ls -la .claude/hooks/pushover-notify.py
-
-   # 应该显示 -rwxr-xr-x (可执行权限)
    ```
 
 ### 摘要生成失败
@@ -243,10 +292,15 @@ Remove-Item -Recurse -Force .claude\cache\*
 ```
 .claude/
 ├── hooks/
-│   └── pushover-notify.py    # 主 hook 脚本
+│   ├── pushover-notify.py    # 主 hook 脚本
+│   ├── test-pushover.py      # 测试通知脚本
+│   ├── diagnose.py           # 诊断脚本
+│   ├── debug.log             # 调试日志（运行时生成）
+│   └── README.md             # 详细文档
 ├── cache/                     # 会话缓存目录（自动清理）
 │   └── session-{id}.jsonl     # 会话缓存文件
 └── settings.json              # Hook 配置文件
+install.py                     # 自动安装脚本
 ```
 
 ## 许可证

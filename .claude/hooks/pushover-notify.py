@@ -57,21 +57,20 @@ def send_pushover(title: str, message: str, priority: int = 0) -> bool:
 
     log(f"Environment variables found - TOKEN: {token[:10]}..., USER: {user[:10]}...")
 
-    # Windows-compatible output file
-    if sys.platform == "win32":
-        null_path = "NUL"
-    else:
-        null_path = "/dev/null"
-
-    # Convert literal \n to actual newlines for the message
-    message = message.replace("\\n", "\n")
+    # Create a temp file to capture response body for debugging
+    import tempfile
+    with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.txt') as f:
+        response_file = f.name
 
     try:
+        # Convert literal \n to actual newlines for the message
+        message = message.replace("\\n", "\n")
+
         # Build curl command with URL encoding
         cmd = [
             "curl",
             "-s",
-            "-o", null_path,
+            "-o", response_file,
             "-w", "%{http_code}",
             "https://api.pushover.net/1/messages.json",
             "--data-urlencode", f"token={token}",
@@ -87,10 +86,42 @@ def send_pushover(title: str, message: str, priority: int = 0) -> bool:
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
 
         log(f"Curl return code: {result.returncode}")
-        log(f"Curl stdout: {result.stdout}")
-        log(f"Curl stderr: {result.stderr}")
+        http_code = result.stdout.strip()
+        log(f"HTTP Status Code: {http_code}")
 
-        success = result.returncode == 0 and "200" in result.stdout
+        # Read and log response body
+        try:
+            with open(response_file, 'r', encoding='utf-8') as f:
+                response_body = f.read()
+            log(f"API Response: {response_body}")
+
+            # Parse JSON for detailed error info
+            try:
+                response_json = json.loads(response_body)
+                if response_json.get("status") == 1:
+                    log(f"Request successful - ID: {response_json.get('request', 'N/A')}")
+                    return True
+                else:
+                    log("ERROR: API returned status != 1")
+                    if "errors" in response_json:
+                        for error in response_json["errors"]:
+                            log(f"API Error: {error}")
+                    return False
+            except json.JSONDecodeError:
+                log("WARNING: Could not parse response as JSON")
+
+        except Exception as e:
+            log(f"WARNING: Could not read response file: {e}")
+
+        # Fallback: check HTTP code
+        success = result.returncode == 0 and http_code == "200"
+        if not success:
+            if http_code == "400":
+                log("ERROR: HTTP 400 - Bad Request (check token/user key)")
+            elif http_code == "401":
+                log("ERROR: HTTP 401 - Unauthorized (invalid token)")
+            elif http_code == "404":
+                log("ERROR: HTTP 404 - User not found")
         log(f"Request successful: {success}")
         return success
 
@@ -103,6 +134,12 @@ def send_pushover(title: str, message: str, priority: int = 0) -> bool:
     except Exception as e:
         log(f"ERROR: Exception in send_pushover: {e}")
         return False
+    finally:
+        # Clean up temp file
+        try:
+            Path(response_file).unlink(missing_ok=True)
+        except Exception:
+            pass
 
 
 def get_project_name(cwd: str) -> str:
