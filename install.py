@@ -135,8 +135,55 @@ class Installer:
             print("[ERROR] No files were copied!")
             sys.exit(1)
 
+    def backup_settings(self, settings_path: Path) -> None:
+        """Create a backup of existing settings.json."""
+        try:
+            from datetime import datetime
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            backup_path = settings_path.parent / f"settings.json.backup_{timestamp}"
+            shutil.copy2(settings_path, backup_path)
+            print(f"[OK] Backed up existing settings.json to:")
+            print(f"     {backup_path.name}")
+        except Exception as e:
+            print(f"[WARN] Failed to backup settings.json: {e}")
+
+    def merge_hook_configs(self, existing_hooks: dict, new_hooks: dict) -> dict:
+        """
+        Merge new hook configurations into existing ones.
+
+        Args:
+            existing_hooks: Existing hooks configuration
+            new_hooks: New hooks configuration to add
+
+        Returns:
+            Merged hooks configuration
+        """
+        merged = existing_hooks.copy()
+
+        for event_name, event_configs in new_hooks.items():
+            if event_name not in merged:
+                # Event doesn't exist, add it
+                merged[event_name] = event_configs
+            else:
+                # Event exists, merge the hook configurations
+                for new_event_config in event_configs:
+                    # Check if this config already exists (by comparing hooks)
+                    found = False
+                    for existing_event_config in merged[event_name]:
+                        if existing_event_config.get("hooks") == new_event_config.get("hooks"):
+                            found = True
+                            break
+
+                    if not found:
+                        # Add new hook configuration for this event
+                        merged[event_name].append(new_event_config)
+                    else:
+                        print(f"[INFO] Hook already exists for {event_name}, skipping")
+
+        return merged
+
     def generate_settings_json(self) -> None:
-        """Generate platform-specific settings.json."""
+        """Generate or merge platform-specific settings.json."""
         print("\n[Step 4/5] Generating Configuration")
         print("-" * 60)
 
@@ -150,52 +197,89 @@ class Installer:
             # Unix: can use shebang
             command = '"$CLAUDE_PROJECT_DIR/.claude/hooks/pushover-notify.py"'
 
-        settings = {
-            "hooks": {
-                "UserPromptSubmit": [
-                    {
-                        "hooks": [
-                            {
-                                "type": "command",
-                                "command": command
-                            }
-                        ]
-                    }
-                ],
-                "Stop": [
-                    {
-                        "hooks": [
-                            {
-                                "type": "command",
-                                "command": command
-                            }
-                        ]
-                    }
-                ],
-                "Notification": [
-                    {
-                        "matcher": "permission_prompt|idle_prompt",
-                        "hooks": [
-                            {
-                                "type": "command",
-                                "command": command
-                            }
-                        ]
-                    }
-                ]
-            }
+        # New Pushover hook configuration
+        pushover_hooks = {
+            "UserPromptSubmit": [
+                {
+                    "hooks": [
+                        {
+                            "type": "command",
+                            "command": command
+                        }
+                    ]
+                }
+            ],
+            "Stop": [
+                {
+                    "hooks": [
+                        {
+                            "type": "command",
+                            "command": command
+                        }
+                    ]
+                }
+            ],
+            "Notification": [
+                {
+                    "matcher": "permission_prompt|idle_prompt",
+                    "hooks": [
+                        {
+                            "type": "command",
+                            "command": command
+                        }
+                    ]
+                }
+            ]
         }
 
         settings_path = self.target_dir / ".claude" / "settings.json"
-        try:
-            with open(settings_path, 'w', encoding='utf-8') as f:
-                json.dump(settings, f, indent=2, ensure_ascii=False)
-            print(f"[OK] Created: {settings_path}")
-            print(f"[INFO] Platform: {self.platform}")
-            print(f"[INFO] Command: {command}")
-        except Exception as e:
-            print(f"[ERROR] Failed to create settings.json: {e}")
-            sys.exit(1)
+
+        # Check if settings.json already exists
+        if settings_path.exists():
+            print(f"[INFO] Existing settings.json found")
+            try:
+                with open(settings_path, 'r', encoding='utf-8') as f:
+                    existing_settings = json.load(f)
+
+                # Backup existing settings
+                self.backup_settings(settings_path)
+
+                # Merge hooks
+                existing_hooks = existing_settings.get("hooks", {})
+                merged_hooks = self.merge_hook_configs(existing_hooks, pushover_hooks)
+
+                # Update settings with merged hooks
+                existing_settings["hooks"] = merged_hooks
+
+                # Write merged settings
+                with open(settings_path, 'w', encoding='utf-8') as f:
+                    json.dump(existing_settings, f, indent=2, ensure_ascii=False)
+
+                print(f"[OK] Merged Pushover hooks into existing settings.json")
+                print(f"[INFO] Platform: {self.platform}")
+                print(f"[INFO] Command: {command}")
+                print(f"[INFO] Your existing hook configurations are preserved")
+
+            except json.JSONDecodeError as e:
+                print(f"[ERROR] Existing settings.json is invalid: {e}")
+                print(f"[INFO] Creating new settings.json...")
+                raise
+            except Exception as e:
+                print(f"[ERROR] Failed to merge settings.json: {e}")
+                print(f"[INFO] Creating new settings.json...")
+                raise
+        else:
+            # Create new settings.json
+            settings = {"hooks": pushover_hooks}
+            try:
+                with open(settings_path, 'w', encoding='utf-8') as f:
+                    json.dump(settings, f, indent=2, ensure_ascii=False)
+                print(f"[OK] Created: {settings_path}")
+                print(f"[INFO] Platform: {self.platform}")
+                print(f"[INFO] Command: {command}")
+            except Exception as e:
+                print(f"[ERROR] Failed to create settings.json: {e}")
+                sys.exit(1)
 
     def show_env_instructions(self) -> None:
         """Show environment variable setup instructions."""
