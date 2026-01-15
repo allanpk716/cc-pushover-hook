@@ -253,6 +253,14 @@ Summary:"""
 def main() -> None:
     """Main hook handler."""
     log("=" * 60)
+
+    # Force UTF-8 encoding for stdin on all platforms (Windows encoding fix)
+    if hasattr(sys.stdin, 'reconfigure'):
+        sys.stdin.reconfigure(encoding='utf-8')
+        log(f"Stdin encoding configured: {sys.stdin.encoding}")
+    else:
+        log("WARNING: stdin.reconfigure not available (Python < 3.7)")
+
     log(f"Hook script started - Event: Processing")
 
     # Read hook event from stdin
