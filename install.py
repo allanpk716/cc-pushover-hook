@@ -188,14 +188,14 @@ class Installer:
         print("-" * 60)
 
         # Determine the command format based on platform
+        # NOTE: Use forward slashes for paths even on Windows - Claude Code handles this correctly
+        # The $CLAUDE_PROJECT_DIR variable is expanded by Claude Code before execution
         if self.platform == "Windows":
-            # Windows: need to use python command
-            # The $CLAUDE_PROJECT_DIR variable expansion handles paths with spaces
-            # Don't add extra quotes around the variable reference
-            command = 'python "$CLAUDE_PROJECT_DIR\\.claude\\hooks\\pushover-notify.py"'
+            # Windows: need to use python command with forward slashes
+            command = "python \"$CLAUDE_PROJECT_DIR/.claude/hooks/pushover-notify.py\""
         else:
             # Unix: can use shebang
-            command = '"$CLAUDE_PROJECT_DIR/.claude/hooks/pushover-notify.py"'
+            command = "\"$CLAUDE_PROJECT_DIR/.claude/hooks/pushover-notify.py\""
 
         # New Pushover hook configuration
         pushover_hooks = {
