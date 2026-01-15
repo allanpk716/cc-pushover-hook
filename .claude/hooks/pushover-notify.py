@@ -330,6 +330,8 @@ def main() -> None:
         log(f"Sending notification: {title}")
         send_pushover(title, message, priority=0)
 
+        log(f"Message stats: chars={len(message)}, bytes={len(message.encode('utf-8'))}")
+
         # Clean up cache
         cache_file = Path(cwd) / ".claude" / "cache" / f"session-{session_id}.jsonl"
         try:
@@ -363,6 +365,8 @@ def main() -> None:
         log(f"Sending attention notification: {title}")
         # Higher priority for attention needed
         send_pushover(title, message, priority=1)
+
+        log(f"Message stats: chars={len(message)}, bytes={len(message.encode('utf-8'))}")
     else:
         log(f"WARNING: Unknown hook event type: {hook_event}")
 
