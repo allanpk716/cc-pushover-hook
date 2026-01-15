@@ -84,6 +84,18 @@ chmod +x .claude/hooks/pushover-notify.py
 
 手动测试 hook 是否正常工作：
 
+**Windows (PowerShell):**
+```powershell
+# 使用你当前项目的实际路径
+'{"hook_event_name":"Stop","session_id":"test123","cwd":"C:\WorkSpace\YourProject"}' | python .claude\hooks\pushover-notify.py
+```
+
+**Windows (CMD):**
+```cmd
+echo {"hook_event_name":"Stop","session_id":"test123","cwd":"C:\WorkSpace\YourProject"} | python .claude\hooks\pushover-notify.py
+```
+
+**Linux/macOS:**
 ```bash
 echo '{"hook_event_name":"Stop","session_id":"test123","cwd":"/path/to/project"}' | \
   .claude/hooks/pushover-notify.py
