@@ -143,12 +143,12 @@ class Installer:
         # Determine the command format based on platform
         if self.platform == "Windows":
             # Windows: need to use python command
-            command = '"$CLAUDE_PROJECT_DIR"\\.claude\\hooks\\pushover-notify.py'
-            # On Windows, we need python explicit
-            command = f'python "{command}"'
+            # The $CLAUDE_PROJECT_DIR variable expansion handles paths with spaces
+            # Don't add extra quotes around the variable reference
+            command = 'python "$CLAUDE_PROJECT_DIR\\.claude\\hooks\\pushover-notify.py"'
         else:
             # Unix: can use shebang
-            command = '"$CLAUDE_PROJECT_DIR"/.claude/hooks/pushover-notify.py'
+            command = '"$CLAUDE_PROJECT_DIR/.claude/hooks/pushover-notify.py"'
 
         settings = {
             "hooks": {
