@@ -350,9 +350,13 @@ def main() -> None:
 
         # Build message from notification body
         if isinstance(notification_body, dict):
-            details = notification_body.get("text", str(notification_body))
+            # Extract meaningful content, skip empty dicts
+            if notification_body:
+                details = notification_body.get("text", json.dumps(notification_body, ensure_ascii=False))
+            else:
+                details = "No additional details provided"
         else:
-            details = str(notification_body)
+            details = str(notification_body) if notification_body else "No additional details provided"
 
         message = f"Session: {session_id}\\nType: {notification_type}\\n{details}"
 
