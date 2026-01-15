@@ -151,6 +151,9 @@ class Installer:
         """
         Merge new hook configurations into existing ones.
 
+        This function intelligently replaces old pushover hook configurations
+        with new ones to prevent duplicates when command formats differ.
+
         Args:
             existing_hooks: Existing hooks configuration
             new_hooks: New hooks configuration to add
@@ -165,20 +168,48 @@ class Installer:
                 # Event doesn't exist, add it
                 merged[event_name] = event_configs
             else:
-                # Event exists, merge the hook configurations
+                # Event exists, check for pushover hooks to replace
                 for new_event_config in event_configs:
-                    # Check if this config already exists (by comparing hooks)
-                    found = False
-                    for existing_event_config in merged[event_name]:
-                        if existing_event_config.get("hooks") == new_event_config.get("hooks"):
-                            found = True
-                            break
+                    new_hooks_list = new_event_config.get("hooks", [])
+                    new_has_pushover = any(
+                        "pushover-notify.py" in hook.get("command", "")
+                        for hook in new_hooks_list
+                    )
 
-                    if not found:
-                        # Add new hook configuration for this event
+                    if new_has_pushover:
+                        # Remove existing pushover hooks for this event
+                        filtered_configs = []
+                        removed_count = 0
+                        for existing_event_config in merged[event_name]:
+                            existing_hooks_list = existing_event_config.get("hooks", [])
+                            existing_has_pushover = any(
+                                "pushover-notify.py" in hook.get("command", "")
+                                for hook in existing_hooks_list
+                            )
+                            if existing_has_pushover:
+                                removed_count += 1
+                            else:
+                                filtered_configs.append(existing_event_config)
+
+                        merged[event_name] = filtered_configs
+
+                        if removed_count > 0:
+                            print(f"[INFO] Replaced {removed_count} old pushover hook(s) for {event_name}")
+
+                        # Add new configuration
                         merged[event_name].append(new_event_config)
                     else:
-                        print(f"[INFO] Hook already exists for {event_name}, skipping")
+                        # Non-pushover hook, check for exact match
+                        found = False
+                        for existing_event_config in merged[event_name]:
+                            if existing_event_config.get("hooks") == new_event_config.get("hooks"):
+                                found = True
+                                break
+
+                        if not found:
+                            merged[event_name].append(new_event_config)
+                        else:
+                            print(f"[INFO] Hook already exists for {event_name}, skipping")
 
         return merged
 
