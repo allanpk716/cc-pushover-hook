@@ -195,10 +195,12 @@ class Installer:
         if self.platform == "Windows":
             # Windows: need to use python command with absolute path
             # Convert to absolute path and use forward slashes (Python on Windows handles them correctly)
-            command = f"python \"{hook_script_path}\""
+            # Also set PYTHONIOENCODING to ensure UTF-8 output on Windows
+            command = f"set PYTHONIOENCODING=utf-8&& python \"{hook_script_path}\""
         else:
             # Unix: can use shebang with absolute path
-            command = f"\"{hook_script_path}\""
+            # Set PYTHONIOENCODING for consistency
+            command = f"PYTHONIOENCODING=utf-8 \"{hook_script_path}\""
 
         # New Pushover hook configuration
         pushover_hooks = {
