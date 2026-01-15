@@ -310,3 +310,44 @@ MIT License
 ## 贡献
 
 欢迎提交 Issue 和 Pull Request！
+
+## 编码故障排查
+
+### 中文显示为乱码
+
+如果中文或其他非 ASCII 字符在通知中显示为乱码：
+
+1. **验证 Python 版本** - 需要 Python 3.7+ 才能支持 `sys.stdin.reconfigure()`
+   ```bash
+   python --version
+   ```
+
+2. **检查 hook 命令是否包含编码变量** - 在 `.claude/settings.json` 中：
+   ```json
+   "command": "set PYTHONIOENCODING=utf-8&& \"$CLAUDE_PROJECT_DIR/.claude/hooks/pushover-notify.py\""
+   ```
+
+3. **运行编码测试**：
+   ```bash
+   cd .claude/hooks && python test-encoding-manual.py
+   ```
+
+4. **检查调试日志** - 查看 `.claude/hooks/debug.log` 中的内容：
+   ```
+   [时间戳] Stdin encoding configured: utf-8
+   [时间戳] Message stats: chars=XX, bytes=YY
+   ```
+
+### 通知内容显示为 `{}`
+
+如果通知正文显示字面量 `{}` 而不是有意义的消息：
+
+1. 此问题已在更新后的脚本中修复
+2. 更新到最新版本：`git pull` 或重新安装 hooks
+3. 验证 `pushover-notify.py` 包含改进的消息体处理逻辑（约第 343-349 行）
+
+### Windows 特定说明
+
+- Windows 控制台默认使用 CP936/GBK（中文）或 CP1252（英文）编码
+- 在 Windows 上，`PYTHONIOENCODING=utf-8` 覆盖设置至关重要
+- CMD 和 PowerShell 都支持 `set VAR=value&& command` 语法
