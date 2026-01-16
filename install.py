@@ -103,7 +103,7 @@ class Installer:
         print("\n[Step 3/5] Copying Hook Files")
         print("-" * 60)
 
-        source_hooks_dir = self.script_dir / ".claude" / "hooks"
+        source_hooks_dir = self.script_dir / ".claude" / "hooks" / "pushover-hook"
 
         files_to_copy = [
             "pushover-notify.py",
