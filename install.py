@@ -82,11 +82,11 @@ class Installer:
             return target
 
     def create_hook_directory(self) -> None:
-        """Create the .claude/hooks directory structure."""
+        """Create the .claude/hooks/pushover-hook directory structure."""
         print("\n[Step 2/5] Creating Hook Directory")
         print("-" * 60)
 
-        self.hook_dir = self.target_dir / ".claude" / "hooks"
+        self.hook_dir = self.target_dir / ".claude" / "hooks" / "pushover-hook"
         cache_dir = self.target_dir / ".claude" / "cache"
 
         try:
