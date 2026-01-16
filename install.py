@@ -103,6 +103,27 @@ class Installer:
         print("\n[Step 3/5] Copying Hook Files")
         print("-" * 60)
 
+        # Detect old files from previous installation
+        old_hooks_dir = self.target_dir / ".claude" / "hooks"
+        old_files_to_cleanup = [
+            "pushover-notify.py",
+            "test-pushover.py",
+            "diagnose.py",
+            "README.md",
+            "debug.log",
+        ]
+
+        existing_old_files = []
+        for filename in old_files_to_cleanup:
+            old_file = old_hooks_dir / filename
+            if old_file.exists():
+                existing_old_files.append(old_file)
+
+        # Check for __pycache__ directory
+        old_pycache = old_hooks_dir / "__pycache__"
+        if old_pycache.exists() and old_pycache.is_dir():
+            existing_old_files.append(old_pycache)
+
         source_hooks_dir = self.script_dir / ".claude" / "hooks" / "pushover-hook"
 
         files_to_copy = [
