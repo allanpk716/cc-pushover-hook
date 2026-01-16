@@ -342,6 +342,8 @@ def main() -> None:
 
     elif hook_event == "Notification":
         log("Processing Notification event")
+        # Log full input for debugging
+        log(f"Full Notification input: {json.dumps(hook_input, ensure_ascii=False)}")
         # Get notification type (correct field name from docs)
         notification_type = hook_input.get("notification_type", "notification")
         log(f"Notification type: {notification_type}")
