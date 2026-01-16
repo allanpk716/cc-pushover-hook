@@ -119,7 +119,8 @@
 ```
 .claude/
 ├── hooks/
-│   └── pushover-notify.py
+│   └── pushover-hook/
+│       └── pushover-notify.py
 ├── cache/
 │   └── session-{id}.jsonl
 └── settings.json
@@ -218,8 +219,8 @@ Hook 触发
 
 1. 获取 Pushover 凭证
 2. 设置环境变量 `PUSHOVER_TOKEN` 和 `PUSHOVER_USER`
-3. 创建 `.claude/hooks/` 和 `.claude/cache/` 目录
-4. 添加 `pushover-notify.py` 脚本
+3. 创建 `.claude/hooks/pushover-hook/` 和 `.claude/cache/` 目录
+4. 添加 `pushover-notify.py` 脚本到 `pushover-hook/` 子目录
 5. 设置脚本执行权限 (Linux/macOS)
 6. 配置 `.claude/settings.json`
 7. 添加 `.claude/cache/` 到 `.gitignore`
