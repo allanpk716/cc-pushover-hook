@@ -88,10 +88,11 @@ cp -r .claude /path/to/your/project/
 your-project/
 ├── .claude/
 │   ├── hooks/
-│   │   ├── pushover-notify.py
-│   │   ├── test-pushover.py
-│   │   ├── diagnose.py
-│   │   └── README.md
+│   │   └── pushover-hook/
+│   │       ├── pushover-notify.py
+│   │       ├── test-pushover.py
+│   │       ├── diagnose.py
+│   │       └── README.md
 │   ├── cache/
 │   └── settings.json
 └── README.md
@@ -100,7 +101,7 @@ your-project/
 ### 4. 设置执行权限（Linux/macOS）
 
 ```bash
-chmod +x .claude/hooks/*.py
+chmod +x .claude/hooks/pushover-hook/*.py
 ```
 
 ### 5. 验证安装
@@ -108,13 +109,13 @@ chmod +x .claude/hooks/*.py
 **运行诊断脚本：**
 
 ```bash
-python .claude/hooks/diagnose.py
+python .claude/hooks/pushover-hook/diagnose.py
 ```
 
 **发送测试通知：**
 
 ```bash
-python .claude/hooks/test-pushover.py
+python .claude/hooks/pushover-hook/test-pushover.py
 ```
 
 ### 6. 手动测试（可选）
@@ -124,18 +125,18 @@ python .claude/hooks/test-pushover.py
 **Windows (PowerShell):**
 ```powershell
 # 使用你当前项目的实际路径
-'{"hook_event_name":"Stop","session_id":"test123","cwd":"C:\WorkSpace\YourProject"}' | python .claude\hooks\pushover-notify.py
+'{"hook_event_name":"Stop","session_id":"test123","cwd":"C:\WorkSpace\YourProject"}' | python .claude\hooks\pushover-hook\pushover-notify.py
 ```
 
 **Windows (CMD):**
 ```cmd
-echo {"hook_event_name":"Stop","session_id":"test123","cwd":"C:\WorkSpace\YourProject"} | python .claude\hooks\pushover-notify.py
+echo {"hook_event_name":"Stop","session_id":"test123","cwd":"C:\WorkSpace\YourProject"} | python .claude\hooks\pushover-hook\pushover-notify.py
 ```
 
 **Linux/macOS:**
 ```bash
 echo '{"hook_event_name":"Stop","session_id":"test123","cwd":"/path/to/project"}' | \
-  .claude/hooks/pushover-notify.py
+  .claude/hooks/pushover-hook/pushover-notify.py
 ```
 
 你应该在 Pushover 上收到一条测试通知。
@@ -209,7 +210,7 @@ rm .no-pushover
 
 ### 修改通知优先级
 
-编辑 `.claude/hooks/pushover-notify.py`，修改 `priority` 参数：
+编辑 `.claude/hooks/pushover-hook/pushover-notify.py`，修改 `priority` 参数：
 
 | 优先级 | 说明 |
 |--------|------|
@@ -231,7 +232,7 @@ rm .no-pushover
         "hooks": [
           {
             "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/pushover-notify.py"
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/pushover-hook/pushover-notify.py"
           }
         ]
       }
@@ -248,7 +249,7 @@ rm .no-pushover
 **使用诊断脚本快速排查：**
 
 ```bash
-python .claude/hooks/diagnose.py
+python .claude/hooks/pushover-hook/diagnose.py
 ```
 
 诊断脚本会检查：
@@ -272,12 +273,12 @@ python .claude/hooks/diagnose.py
 
 2. **发送测试通知**
    ```bash
-   python .claude/hooks/test-pushover.py
+   python .claude/hooks/pushover-hook/test-pushover.py
    ```
 
 3. **查看调试日志**
    ```bash
-   cat .claude/hooks/debug.log
+   cat .claude/hooks/pushover-hook/debug.log
    ```
 
 4. **Token 和 User Key 是否有效**
@@ -334,15 +335,16 @@ Remove-Item -Recurse -Force .claude\cache\*
 ```
 .claude/
 ├── hooks/
-│   ├── pushover-notify.py    # 主 hook 脚本
-│   ├── test-pushover.py      # 测试通知脚本
-│   ├── diagnose.py           # 诊断脚本
-│   ├── debug.log             # 调试日志（运行时生成）
-│   └── README.md             # 详细文档
-├── cache/                     # 会话缓存目录（自动清理）
-│   └── session-{id}.jsonl     # 会话缓存文件
-└── settings.json              # Hook 配置文件
-install.py                     # 自动安装脚本
+│   └── pushover-hook/
+│       ├── pushover-notify.py    # 主 hook 脚本
+│       ├── test-pushover.py      # 测试通知脚本
+│       ├── diagnose.py           # 诊断脚本
+│       ├── debug.log             # 调试日志（运行时生成）
+│       └── README.md             # 详细文档
+├── cache/                         # 会话缓存目录（自动清理）
+│   └── session-{id}.jsonl         # 会话缓存文件
+└── settings.json                  # Hook 配置文件
+install.py                         # 自动安装脚本
 ```
 
 ## 许可证
@@ -366,15 +368,15 @@ MIT License
 
 2. **检查 hook 命令是否包含编码变量** - 在 `.claude/settings.json` 中：
    ```json
-   "command": "set PYTHONIOENCODING=utf-8&& \"$CLAUDE_PROJECT_DIR/.claude/hooks/pushover-notify.py\""
+   "command": "set PYTHONIOENCODING=utf-8&& \"$CLAUDE_PROJECT_DIR/.claude/hooks/pushover-hook/pushover-notify.py\""
    ```
 
 3. **运行编码测试**：
    ```bash
-   cd .claude/hooks && python test-encoding-manual.py
+   cd .claude/hooks/pushover-hook && python test-encoding-manual.py
    ```
 
-4. **检查调试日志** - 查看 `.claude/hooks/debug.log` 中的内容：
+4. **检查调试日志** - 查看 `.claude/hooks/pushover-hook/debug.log` 中的内容：
    ```
    [时间戳] Stdin encoding configured: utf-8
    [时间戳] Message stats: chars=XX, bytes=YY
