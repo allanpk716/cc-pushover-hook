@@ -91,6 +91,16 @@ python .claude/hooks/pushover-hook/test-pushover.py
 3. 运行诊断脚本验证配置
 4. 触发一个 Claude Code 任务测试
 
+## 升级说明
+
+如果您从旧版本升级：
+- 直接运行 `python install.py` 即可
+- 安装脚本会自动：
+  - ✅ 复制新文件到 pushover-hook/ 子目录
+  - ✅ 删除旧位置的脚本文件
+  - ✅ 更新 settings.json 中的路径
+  - ✅ 备份现有配置（settings.json.backup_*）
+
 ## 日志位置
 
 - 调试日志: `.claude/hooks/pushover-hook/debug.log`
