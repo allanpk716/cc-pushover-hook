@@ -99,7 +99,7 @@ class Installer:
             sys.exit(1)
 
     def copy_hook_files(self) -> None:
-        """Copy hook script files to target directory."""
+        """Copy hook script files to target directory and cleanup old files."""
         print("\n[Step 3/5] Copying Hook Files")
         print("-" * 60)
 
