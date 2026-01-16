@@ -5,7 +5,9 @@
 ## 功能特性
 
 - **任务完成通知** - Claude Code 完成任务响应时自动发送通知
-- **需要关注通知** - 需要权限请求或等待输入时发送高优先级通知
+- **需要关注通知** - 需要权限请求、Plan 模式询问或其他需要交互时发送高优先级通知
+- **智能过滤** - 自动过滤 CLI 空闲提醒（idle_prompt），只在真正需要交互时通知
+- **项目级禁用** - 通过创建 `.no-pushover` 文件即可临时禁用单个项目的通知
 - **AI 任务摘要** - 使用 Claude CLI 自动生成任务摘要
 - **跨平台支持** - 支持 Windows、Linux 和 macOS
 - **降级策略** - CLI 调用失败时自动降级
@@ -154,16 +156,56 @@ Summary: Implemented user authentication feature
 
 ### 场景 2: 需要关注
 
-当 Claude Code 需要你的人工干预时，你会收到高优先级通知：
+当 Claude Code 需要你的人工干预时（如权限请求、Plan 模式询问等），你会收到高优先级通知：
 
 ```
 [cc-pushover-hook] Attention Needed
 Session: abc123def456
 Type: permission_prompt
-Run command: npm install
+Claude Code needs your attention
 ```
 
+**通知类型说明：**
+- `permission_prompt` - 需要权限批准（如运行命令、修改文件）
+- `elicitation_dialog` - MCP 工具配置对话框
+- `auth_success` - 认证成功通知
+- 其他需要交互的通知类型
+
+**已过滤的通知类型：**
+- `idle_prompt` - CLI 空闲 60+ 秒的提醒（已自动过滤，不会发送通知）
+
 ## 配置选项
+
+### 禁用项目通知
+
+如果您想临时禁用某个项目的所有通知，只需在项目根目录创建一个 `.no-pushover` 文件：
+
+**Windows:**
+```cmd
+type nul > .no-pushover
+```
+
+**Linux/macOS:**
+```bash
+touch .no-pushover
+```
+
+删除该文件即可恢复通知：
+
+**Windows:**
+```cmd
+del .no-pushover
+```
+
+**Linux/macOS:**
+```bash
+rm .no-pushover
+```
+
+**特点：**
+- 每个项目独立控制，不影响其他项目
+- 操作简单，无需修改配置文件
+- 会在 debug.log 中记录禁用状态
 
 ### 修改通知优先级
 

@@ -34,7 +34,24 @@ def log(message: str) -> None:
         pass
 
 
-def send_pushover(title: str, message: str, priority: int = 0) -> bool:
+def is_notification_disabled(cwd: str) -> bool:
+    """
+    Check if notifications are disabled for the current project.
+
+    Args:
+        cwd: Current working directory (project root)
+
+    Returns:
+        True if .no-pushover file exists, False otherwise
+    """
+    silent_file = Path(cwd) / ".no-pushover"
+    disabled = silent_file.exists()
+    if disabled:
+        log(f"Notifications disabled: {silent_file} exists")
+    return disabled
+
+
+def send_pushover(title: str, message: str, priority: int = 0, cwd: str = "") -> bool:
     """
     Send a notification via Pushover API using curl.
 
@@ -42,10 +59,16 @@ def send_pushover(title: str, message: str, priority: int = 0) -> bool:
         title: Notification title
         message: Notification message body
         priority: Message priority (-2 to 2, default 0)
+        cwd: Current working directory to check for .no-pushover file
 
     Returns:
         True if successful, False otherwise
     """
+    # Check if notifications are disabled for this project
+    if cwd and is_notification_disabled(cwd):
+        log(f"Notification skipped due to .no-pushover file: {title}")
+        return False
+
     log(f"send_pushover called: title='{title}', priority={priority}")
 
     token = os.environ.get("PUSHOVER_TOKEN")
@@ -328,7 +351,7 @@ def main() -> None:
         message = f"Session: {session_id}\\nSummary: {summary}"
 
         log(f"Sending notification: {title}")
-        send_pushover(title, message, priority=0)
+        send_pushover(title, message, priority=0, cwd=cwd)
 
         log(f"Message stats: chars={len(message)}, bytes={len(message.encode('utf-8'))}")
 
@@ -367,7 +390,7 @@ def main() -> None:
 
         log(f"Sending attention notification: {title}")
         # Higher priority for attention needed
-        send_pushover(title, message, priority=1)
+        send_pushover(title, message, priority=1, cwd=cwd)
 
         log(f"Message stats: chars={len(message)}, bytes={len(message.encode('utf-8'))}")
     else:

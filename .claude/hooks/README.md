@@ -1,5 +1,29 @@
 # Claude Code Pushover 通知 Hook
 
+## 禁用通知
+
+如果您想临时禁用某个项目的通知，只需在项目根目录创建一个 `.no-pushover` 文件：
+
+```bash
+# Windows
+type nul > .no-pushover
+
+# Linux/Mac
+touch .no-pushover
+```
+
+删除该文件即可恢复通知：
+
+```bash
+# Windows
+del .no-pushover
+
+# Linux/Mac
+rm .no-pushover
+```
+
+**注意**：此功能对当前项目单独生效，不会影响其他项目。
+
 ## 问题诊断
 
 如果通知未收到，按以下步骤排查：
