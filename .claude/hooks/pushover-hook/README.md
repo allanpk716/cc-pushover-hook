@@ -33,7 +33,7 @@ rm .no-pushover
 在项目目录中运行：
 
 ```bash
-python .claude/hooks/diagnose.py
+python .claude/hooks/pushover-hook/diagnose.py
 ```
 
 ### 常见问题
@@ -81,7 +81,7 @@ export PUSHOVER_USER=your_user_key
 运行测试脚本发送测试通知：
 
 ```bash
-python .claude/hooks/test-pushover.py
+python .claude/hooks/pushover-hook/test-pushover.py
 ```
 
 ## 部署到新项目
@@ -93,5 +93,5 @@ python .claude/hooks/test-pushover.py
 
 ## 日志位置
 
-- 调试日志: `.claude/hooks/debug.log`
+- 调试日志: `.claude/hooks/pushover-hook/debug.log`
 - 会话缓存: `.claude/cache/session-*.jsonl`
