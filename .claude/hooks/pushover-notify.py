@@ -342,23 +342,24 @@ def main() -> None:
 
     elif hook_event == "Notification":
         log("Processing Notification event")
-        # Send attention needed notification
-        notification_type = hook_input.get("type", "notification")
-        notification_body = hook_input.get("body", {})
+        # Get notification type (correct field name from docs)
+        notification_type = hook_input.get("notification_type", "notification")
+        log(f"Notification type: {notification_type}")
+
+        # Skip idle_prompt notifications (CLI idle for 60+ seconds)
+        if notification_type == "idle_prompt":
+            log("Skipping idle_prompt notification - not sending pushover")
+            return
+
+        # Get notification message (correct field name from docs)
+        notification_message = hook_input.get("message", "")
 
         project_name = get_project_name(cwd)
 
         title = f"[{project_name}] Attention Needed"
 
-        # Build message from notification body
-        if isinstance(notification_body, dict):
-            # Extract meaningful content, skip empty dicts
-            if notification_body:
-                details = notification_body.get("text", json.dumps(notification_body, ensure_ascii=False))
-            else:
-                details = "No additional details provided"
-        else:
-            details = str(notification_body) if notification_body else "No additional details provided"
+        # Build message from notification
+        details = notification_message if notification_message else "No additional details provided"
 
         message = f"Session: {session_id}\\nType: {notification_type}\\n{details}"
 
