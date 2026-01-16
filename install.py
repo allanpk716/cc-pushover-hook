@@ -156,6 +156,22 @@ class Installer:
             print("[ERROR] No files were copied!")
             sys.exit(1)
 
+        # Cleanup old files after successful copy
+        if copied > 0 and existing_old_files:
+            print(f"\n[INFO] Cleaning up {len(existing_old_files)} old file(s)...")
+            for old_file in existing_old_files:
+                try:
+                    if old_file.is_dir():
+                        shutil.rmtree(old_file)
+                    else:
+                        old_file.unlink()
+                    print(f"[OK] Removed: {old_file.name}")
+                except Exception as e:
+                    print(f"[WARN] Failed to remove {old_file.name}: {e}")
+                    print(f"[INFO] Please manually remove: {old_file}")
+        elif copied > 0:
+            print("\n[INFO] No old files found (fresh install or already cleaned)")
+
     def backup_settings(self, settings_path: Path) -> None:
         """Create a backup of existing settings.json."""
         try:
