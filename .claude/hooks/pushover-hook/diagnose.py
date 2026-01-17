@@ -62,7 +62,7 @@ def check_hook_script() -> bool:
 def check_settings() -> bool:
     print_section("4. Settings Configuration")
 
-    settings_path = Path(__file__).parent.parent / "settings.json"
+    settings_path = Path(__file__).parent.parent.parent / "settings.json"
 
     if not settings_path.exists():
         print(f"[MISSING] settings.json not found at: {settings_path}")
