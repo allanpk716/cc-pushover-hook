@@ -36,6 +36,51 @@ def log(message: str) -> None:
         pass
 
 
+def cleanup_old_logs(log_dir: Path, keep_days: int = 3) -> None:
+    """
+    Clean up old log files older than keep_days.
+
+    Only processes files matching debug.YYYY-MM-DD.log pattern.
+    Never deletes the current debug.log file.
+
+    Args:
+        log_dir: Directory containing log files
+        keep_days: Number of days to keep logs (default: 3)
+    """
+    if not log_dir.exists():
+        return
+
+    try:
+        today = datetime.now().date()
+        cutoff_date = today - timedelta(days=keep_days)
+        log_pattern = re.compile(r'debug\.(\d{4}-\d{2}-\d{2})\.log')
+
+        for log_file in log_dir.glob("debug*.log"):
+            # Skip current debug.log
+            if log_file.name == "debug.log":
+                continue
+
+            # Extract date from filename
+            match = log_pattern.match(log_file.name)
+            if not match:
+                continue
+
+            try:
+                file_date = datetime.strptime(match.group(1), "%Y-%m-%d").date()
+                if file_date < cutoff_date:
+                    log_file.unlink(missing_ok=True)
+                    log(f"Cleaned up old log: {log_file.name}")
+            except ValueError:
+                # Invalid date format, skip
+                pass
+            except Exception as e:
+                # Log error but continue processing
+                log(f"Error cleaning log file {log_file.name}: {e}")
+    except Exception:
+        # Silently fail - cleanup should never break the hook
+        pass
+
+
 def is_notification_disabled(cwd: str) -> bool:
     """
     Check if notifications are disabled for the current project.
