@@ -124,11 +124,22 @@ class Installer:
         if old_pycache.exists() and old_pycache.is_dir():
             existing_old_files.append(old_pycache)
 
+        # Check for old disable flag files in .claude directory
+        old_claude_dir = self.target_dir / ".claude"
+        old_disable_files = [
+            old_claude_dir / ".no-pushover",
+            old_claude_dir / ".no-windows",
+        ]
+        for disable_file in old_disable_files:
+            if disable_file.exists():
+                existing_old_files.append(disable_file)
+
         source_hooks_dir = self.script_dir / ".claude" / "hooks" / "pushover-hook"
 
         files_to_copy = [
             "pushover-notify.py",
             "test-pushover.py",
+            "test-windows-notification.py",
             "diagnose.py",
             "README.md",
         ]

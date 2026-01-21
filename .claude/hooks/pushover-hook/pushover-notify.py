@@ -97,9 +97,129 @@ def is_notification_disabled(cwd: str) -> bool:
     return disabled
 
 
-def send_pushover(title: str, message: str, priority: int = 0, cwd: str = "") -> bool:
+def is_windows_notification_disabled(cwd: str) -> bool:
     """
-    Send a notification via Pushover API using curl.
+    Check if Windows notifications are disabled for the current project.
+
+    Args:
+        cwd: Current working directory (project root)
+
+    Returns:
+        True if .no-windows file exists, False otherwise
+    """
+    silent_file = Path(cwd) / ".no-windows"
+    disabled = silent_file.exists()
+    if disabled:
+        log(f"Windows notifications disabled: {silent_file} exists")
+    return disabled
+
+
+def send_windows_notification(title: str, message: str) -> bool:
+    """
+    Send a Windows 10/11 notification using PowerShell.
+
+    Uses BurntToast module if available, falls back to Windows.UI.Notifications.
+    Tries multiple methods for maximum compatibility.
+
+    Args:
+        title: Notification title
+        message: Notification message body
+
+    Returns:
+        True if successful, False otherwise
+    """
+    log(f"send_windows_notification called: title='{title}'")
+
+    # Convert literal \n to actual newlines
+    message = message.replace("\\n", "\n")
+
+    # Escape for PowerShell
+    title_escaped = title.replace("'", "''").replace('"', '""')
+    message_escaped = message.replace("'", "''").replace('"', '""').replace("`", "``")
+
+    # Method 1: Try BurntToast module (most reliable)
+    ps_script_burnttoast = f'''
+    try {{
+        Import-Module BurntToast -ErrorAction Stop
+        New-BurntToastNotification -Title '{title_escaped}' -Body '{message_escaped}'
+        exit 0
+    }} catch {{
+        exit 1
+    }}
+    '''
+
+    # Method 2: Try Windows.UI.Notifications (WinRT)
+    ps_script_winrt = f'''
+    try {{
+        Add-Type -AssemblyName Windows.UI.Notifications -ErrorAction Stop
+        Add-Type -AssemblyName Windows.Data.Xml.Dom -ErrorAction Stop
+        [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier("ClaudeCode") | Out-Null
+        $template = @"
+        <toast><visual><binding template="ToastText02">
+            <text id="1">{title_escaped}</text>
+            <text id="2">{message_escaped}</text>
+        </binding></visual></toast>
+        "@
+        $xml = New-Object Windows.Data.Xml.Dom.XmlDocument
+        $xml.LoadXml($template)
+        $toast = New-Object Windows.UI.Notifications.ToastNotification $xml
+        [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier("ClaudeCode").Show($toast)
+        exit 0
+    }} catch {{
+        exit 1
+    }}
+    '''
+
+    # Method 3: Use .NET ShellNotifyW (Windows classic balloon)
+    ps_script_classic = f'''
+    Add-Type -AssemblyName System.Windows.Forms
+    $balloon = New-Object System.Windows.Forms.NotifyIcon
+    $balloon.Icon = [System.Drawing.SystemIcons]::Information
+    $balloon.BalloonTipTitle = '{title_escaped}'
+    $balloon.BalloonTipText = '{message_escaped}'
+    $balloon.Visible = $true
+    $balloon.ShowBalloonTip(5000)
+    Start-Sleep -Seconds 6
+    $balloon.Dispose()
+    exit 0
+    '''
+
+    methods = [
+        ("BurntToast module", ps_script_burnttoast),
+        ("Windows.UI.Notifications (WinRT)", ps_script_winrt),
+        ("Classic balloon (.NET)", ps_script_classic),
+    ]
+
+    for method_name, script in methods:
+        try:
+            result = subprocess.run(
+                ["powershell", "-Command", script],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+
+            if result.returncode == 0:
+                log(f"Windows notification sent successfully using {method_name}")
+                return True
+            else:
+                log(f"Method '{method_name}' failed, trying next...")
+                continue
+
+        except subprocess.TimeoutExpired:
+            log(f"WARNING: {method_name} timed out, trying next...")
+            continue
+        except Exception as e:
+            log(f"WARNING: {method_name} error: {e}, trying next...")
+            continue
+
+    log("WARNING: All Windows notification methods failed")
+    return False
+
+
+def _send_pushover_internal(title: str, message: str, priority: int = 0, cwd: str = "") -> bool:
+    """
+    Internal: Send a notification via Pushover API using curl.
 
     Args:
         title: Notification title
@@ -212,6 +332,42 @@ def send_pushover(title: str, message: str, priority: int = 0, cwd: str = "") ->
             Path(response_file).unlink(missing_ok=True)
         except Exception:
             pass
+
+
+def send_notifications(title: str, message: str, priority: int = 0, cwd: str = "") -> dict:
+    """
+    Send notifications via enabled channels.
+
+    Args:
+        title: Notification title
+        message: Notification message body
+        priority: Message priority (for Pushover, -2 to 2, default 0)
+        cwd: Current working directory to check for disable files
+
+    Returns:
+        Dict with status of each channel: {"pushover": bool, "windows": bool}
+    """
+    results = {"pushover": False, "windows": False}
+
+    # Check if both are disabled
+    pushover_disabled = cwd and is_notification_disabled(cwd)
+    windows_disabled = cwd and is_windows_notification_disabled(cwd)
+
+    if pushover_disabled and windows_disabled:
+        log("All notifications disabled (.no-pushover and .no-windows both exist)")
+        return results
+
+    # Send Pushover if enabled
+    if not pushover_disabled:
+        results["pushover"] = _send_pushover_internal(title, message, priority, cwd)
+
+    # Send Windows notification if enabled and on Windows
+    if not windows_disabled and sys.platform == "win32":
+        results["windows"] = send_windows_notification(title, message)
+    elif not windows_disabled and sys.platform != "win32":
+        log("Windows native notification not supported on this platform")
+
+    return results
 
 
 def get_project_name(cwd: str) -> str:
@@ -403,7 +559,8 @@ def main() -> None:
         message = f"Session: {session_id}\\nSummary: {summary}"
 
         log(f"Sending notification: {title}")
-        send_pushover(title, message, priority=0, cwd=cwd)
+        results = send_notifications(title, message, priority=0, cwd=cwd)
+        log(f"Notification results: Pushover={results['pushover']}, Windows={results['windows']}")
 
         log(f"Message stats: chars={len(message)}, bytes={len(message.encode('utf-8'))}")
 
@@ -442,7 +599,8 @@ def main() -> None:
 
         log(f"Sending attention notification: {title}")
         # Higher priority for attention needed
-        send_pushover(title, message, priority=1, cwd=cwd)
+        results = send_notifications(title, message, priority=1, cwd=cwd)
+        log(f"Notification results: Pushover={results['pushover']}, Windows={results['windows']}")
 
         log(f"Message stats: chars={len(message)}, bytes={len(message.encode('utf-8'))}")
     else:

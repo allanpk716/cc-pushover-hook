@@ -123,10 +123,48 @@ def show_current_config() -> None:
         print("[INFO] Not currently in a Claude Code session")
 
 
+def check_notification_channels() -> bool:
+    """Check available notification channels."""
+    print_section("7. Notification Channels")
+
+    channels = []
+
+    # Check Pushover
+    token = os.environ.get("PUSHOVER_TOKEN")
+    user = os.environ.get("PUSHOVER_USER")
+    if token and user:
+        print("  [OK] Pushover (enabled)")
+        channels.append("pushover")
+    else:
+        print("  [DISABLED] Pushover (missing env vars)")
+
+    # Check Windows
+    if sys.platform == "win32":
+        print("  [OK] Windows Native (available)")
+        channels.append("windows")
+    else:
+        print(f"  [N/A] Windows Native (not supported on {sys.platform})")
+
+    # Check disable files
+    cwd = os.getcwd()
+    no_pushover = Path(cwd) / ".no-pushover"
+    no_windows = Path(cwd) / ".no-windows"
+
+    if no_pushover.exists():
+        print("  [INFO] Pushover disabled by .no-pushover file")
+    if no_windows.exists():
+        print("  [INFO] Windows disabled by .no-windows file")
+
+    if no_pushover.exists() and no_windows.exists():
+        print("  [WARN] All notifications disabled!")
+
+    return len(channels) > 0
+
+
 def main() -> None:
     print("""
     ╔═══════════════════════════════════════════════════════════╗
-    ║     Claude Code Pushover Hook - Diagnostic Check         ║
+    ║       Claude Code Notification Hook - Diagnostic Check    ║
     ╚═══════════════════════════════════════════════════════════╝
     """)
 
@@ -136,6 +174,7 @@ def main() -> None:
         ("Hook Script", check_hook_script),
         ("Settings Configuration", check_settings),
         ("Cache Directory", check_cache_dir),
+        ("Notification Channels", check_notification_channels),
     ]
 
     results = {}
@@ -157,7 +196,7 @@ def main() -> None:
         print("\nNext steps:")
         print("  1. Trigger a Claude Code task")
         print("  2. Let it complete to trigger Stop event")
-        print("  3. Check for Pushover notification")
+        print("  3. Check for notifications (Pushover and/or Windows)")
         print("  4. Check debug.log for details")
     else:
         print("\n[ISSUES FOUND] Some checks failed:")

@@ -1,8 +1,14 @@
-# Claude Code Pushover 通知 Hook
+# Claude Code 通知 Hook
+
+支持 Pushover 和 Windows 10/11 原生通知，默认双通道同时发送。
 
 ## 禁用通知
 
-如果您想临时禁用某个项目的通知，只需在项目根目录创建一个 `.no-pushover` 文件：
+您可以独立控制每个通知通道：
+
+### 禁用 Pushover 通知
+
+在项目根目录创建 `.no-pushover` 文件：
 
 ```bash
 # Windows
@@ -12,17 +18,36 @@ type nul > .no-pushover
 touch .no-pushover
 ```
 
-删除该文件即可恢复通知：
+### 禁用 Windows 通知
+
+在项目根目录创建 `.no-windows` 文件：
+
+```bash
+# Windows
+type nul > .no-windows
+
+# Linux/Mac
+touch .no-windows
+```
+
+### 恢复通知
+
+删除对应的文件即可恢复该通道的通知：
 
 ```bash
 # Windows
 del .no-pushover
+del .no-windows
 
 # Linux/Mac
 rm .no-pushover
+rm .no-windows
 ```
 
-**注意**：此功能对当前项目单独生效，不会影响其他项目。
+**注意**：
+- 每个禁用文件对当前项目单独生效
+- 同时存在 `.no-pushover` 和 `.no-windows` 将禁用所有通知
+- Windows 原生通知仅支持 Windows 10/11，其他平台会自动跳过
 
 ## 问题诊断
 
@@ -78,10 +103,16 @@ export PUSHOVER_USER=your_user_key
 
 ## 测试通知
 
-运行测试脚本发送测试通知：
+### 测试 Pushover 通知
 
 ```bash
 python .claude/hooks/pushover-hook/test-pushover.py
+```
+
+### 测试 Windows 通知 (Windows 10/11)
+
+```bash
+python .claude/hooks/pushover-hook/test-windows-notification.py
 ```
 
 ## 部署到新项目
