@@ -90,11 +90,14 @@ def send_pushover(title: str, message: str, priority: int = 0, cwd: str = "") ->
         message = message.replace("\\n", "\n")
 
         # Build curl command with URL encoding
+        # Use TLS 1.2+ for Windows schannel compatibility
         cmd = [
             "curl",
             "-s",
             "-o", response_file,
             "-w", "%{http_code}",
+            "--tlsv1.2",
+            "--ssl-reqd",
             "https://api.pushover.net/1/messages.json",
             "--data-urlencode", f"token={token}",
             "--data-urlencode", f"user={user}",
