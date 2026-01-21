@@ -336,6 +336,9 @@ def main() -> None:
 
     log(f"Hook script started - Event: Processing")
 
+    # Clean up old log files
+    cleanup_old_logs(get_log_path().parent)
+
     # Read hook event from stdin
     try:
         stdin_data = sys.stdin.read()
