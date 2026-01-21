@@ -101,6 +101,14 @@ python .claude/hooks/pushover-hook/test-pushover.py
   - ✅ 更新 settings.json 中的路径
   - ✅ 备份现有配置（settings.json.backup_*）
 
+## 日志轮转 (Log Rotation)
+
+调试日志会自动轮转以防止磁盘空间问题：
+- 当前日志：`debug.log`
+- 历史日志：`debug.YYYY-MM-DD.log`
+- 保留期限：最多 3 天的日志
+- 清理时机：脚本启动时自动执行
+
 ## 日志位置
 
 - 调试日志: `.claude/hooks/pushover-hook/debug.log`
