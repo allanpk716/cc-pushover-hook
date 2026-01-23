@@ -102,9 +102,12 @@ def send_windows_notification(title: str, message: str) -> bool:
     Returns:
         True if successful, False otherwise
     """
+    # Convert literal \n to actual newlines (like pushover-notify.py)
+    message = message.replace("\\n", "\n")
+
     # Escape for PowerShell
     title_escaped = title.replace("'", "''").replace('"', '""')
-    message_escaped = message.replace("\n", "`n").replace("'", "''").replace('"', '""').replace("`", "``")
+    message_escaped = message.replace("'", "''").replace('"', '""').replace("`", "``")
 
     # Method 1: Try BurntToast module
     ps_script_burnttoast = f'''
@@ -117,21 +120,16 @@ def send_windows_notification(title: str, message: str) -> bool:
     }}
     '''
 
-    # Method 2: Try Windows.UI.Notifications (WinRT)
+    # Method 2: Try Windows.UI.Notifications (WinRT) with proper runtime loading
     ps_script_winrt = f'''
     try {{
-        Add-Type -AssemblyName Windows.UI.Notifications -ErrorAction Stop
-        Add-Type -AssemblyName Windows.Data.Xml.Dom -ErrorAction Stop
-        [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier("ClaudeCode") | Out-Null
-        $template = @"
-        <toast><visual><binding template="ToastText02">
-            <text id="1">{title_escaped}</text>
-            <text id="2">{message_escaped}</text>
-        </binding></visual></toast>
-        "@
-        $xml = New-Object Windows.Data.Xml.Dom.XmlDocument
-        $xml.LoadXml($template)
-        $toast = New-Object Windows.UI.Notifications.ToastNotification $xml
+        Add-Type -AssemblyName System.Runtime.WindowsRuntime -ErrorAction Stop
+        $null = [Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime]
+        $null = [Windows.Data.Xml.Dom.XmlDocument, Windows.Data.Xml.Dom, ContentType = WindowsRuntime]
+        $xmlString = "<toast><visual><binding template=`"ToastText02`"><text id=`"1`">{title_escaped}</text><text id=`"2`">{message_escaped}</text></binding></visual></toast>"
+        $xmlDoc = New-Object Windows.Data.Xml.Dom.XmlDocument
+        $xmlDoc.LoadXml($xmlString)
+        $toast = New-Object Windows.UI.Notifications.ToastNotification $xmlDoc
         [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier("ClaudeCode").Show($toast)
         exit 0
     }} catch {{
@@ -173,6 +171,10 @@ def send_windows_notification(title: str, message: str) -> bool:
                 return True
             else:
                 print_info(f"Method '{method_name}' failed, trying next...")
+                if result.stdout.strip():
+                    print_info(f"  stdout: {result.stdout[:300]}")
+                if result.stderr.strip():
+                    print_info(f"  stderr: {result.stderr[:300]}")
                 continue
 
         except subprocess.TimeoutExpired:

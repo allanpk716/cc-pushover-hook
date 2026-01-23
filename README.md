@@ -1,336 +1,427 @@
 # Claude Code Pushover 通知 Hook
 
-为 Claude Code 添加 Pushover 通知功能，在任务完成或需要人工干预时发送通知到你的设备。
+为 Claude Code 添加 Pushover 通知功能，在任务完成或需要人工干预时发送通知到你的设备。同时可作为独立通知模块集成到其他应用。
+
+---
+
+## 目录
+
+- [功能特性](#功能特性)
+- [快速开始](#快速开始)
+- [用户使用指南](#用户使用指南)
+- [开发者集成指南](#开发者集成指南)
+- [配置选项](#配置选项)
+- [故障排查](#故障排查)
+
+---
 
 ## 功能特性
 
-- **任务完成通知** - Claude Code 完成任务响应时自动发送通知
-- **需要关注通知** - 需要权限请求、Plan 模式询问或其他需要交互时发送高优先级通知
-- **智能过滤** - 自动过滤 CLI 空闲提醒（idle_prompt），只在真正需要交互时通知
-- **项目级禁用** - 通过创建 `.no-pushover` 文件即可临时禁用单个项目的通知
-- **AI 任务摘要** - 使用 Claude CLI 自动生成任务摘要
-- **跨平台支持** - 支持 Windows、Linux 和 macOS
-- **降级策略** - CLI 调用失败时自动降级
+| 特性 | 说明 |
+|------|------|
+| **任务完成通知** | Claude Code 完成任务响应时自动发送通知 |
+| **需要关注通知** | 需要权限请求、Plan 模式询问或其他需要交互时发送高优先级通知 |
+| **智能过滤** | 自动过滤 CLI 空闲提醒（idle_prompt），只在真正需要交互时通知 |
+| **项目级禁用** | 通过创建 `.no-pushover` 文件即可临时禁用单个项目的通知 |
+| **AI 任务摘要** | 使用 Claude CLI 自动生成任务摘要 |
+| **跨平台支持** | 支持 Windows、Linux 和 macOS |
+| **并行通知** | 同时发送 Pushover 和 Windows 本地通知 |
+| **降级策略** | CLI 调用失败时自动降级 |
+| **日志轮转** | 自动清理 3 天前的调试日志 |
 
-## 前置要求
+---
+
+## 快速开始
+
+### 前置要求
 
 - Python 3.6+
-- Claude Code CLI
 - curl（Windows 10+、Linux、macOS 通常已内置）
 
-## 安装步骤
+### 一键安装
 
-### 1. 获取 Pushover 凭证
+```bash
+# 1. 克隆或下载此项目
+git clone https://github.com/your-repo/cc-pushover-hook.git
+cd cc-pushover-hook
 
-1. 访问 [Pushover.net](https://pushover.net/) 注册账号
-2. 访问 [Applications](https://pushover.net/apps/build) 创建一个应用
-3. 记录 **API Token**（应用密钥）
-4. 在你的账户页面记录 **User Key**（用户密钥）
+# 2. 运行安装脚本
+python install.py
 
-### 2. 设置环境变量
+# 3. 设置环境变量（见下方）
 
-将以下环境变量添加到你的系统配置中：
-
-**Windows (PowerShell):**
-```powershell
-$env:PUSHOVER_TOKEN="your_api_token_here"
-$env:PUSHOVER_USER="your_user_key_here"
+# 4. 发送测试通知
+python .claude/hooks/pushover-hook/test-pushover.py
 ```
 
-**Windows (系统环境变量):**
-1. 右键"此电脑" -> "属性" -> "高级系统设置"
-2. 点击"环境变量"
-3. 添加新的用户变量：
-   - `PUSHOVER_TOKEN` = your_api_token_here
-   - `PUSHOVER_USER` = your_user_key_here
+### 环境变量设置
 
-**Linux/macOS:**
 ```bash
+# Linux/macOS - 添加到 ~/.bashrc 或 ~/.zshrc
 export PUSHOVER_TOKEN="your_api_token_here"
 export PUSHOVER_USER="your_user_key_here"
+
+# Windows PowerShell
+$env:PUSHOVER_TOKEN="your_api_token_here"
+$env:PUSHOVER_USER="your_user_key_here"
+
+# Windows 系统环境变量（永久）
+# 1. 右键"此电脑" -> "属性" -> "高级系统设置"
+# 2. 点击"环境变量"
+# 3. 添加用户变量：
+#    PUSHOVER_TOKEN = your_api_token_here
+#    PUSHOVER_USER  = your_user_key_here
 ```
 
-要永久保存，添加到 `~/.bashrc` 或 `~/.zshrc`：
-```bash
-echo 'export PUSHOVER_TOKEN="your_api_token_here"' >> ~/.bashrc
-echo 'export PUSHOVER_USER="your_user_key_here"' >> ~/.bashrc
-```
+> **获取凭证：** 访问 [Pushover.net](https://pushover.net/) 注册账号并创建应用获取 API Token 和 User Key
 
-### 3. 安装 Hook
+---
 
-#### 方法一：使用自动安装脚本（推荐）
+## 用户使用指南
 
-在项目根目录运行安装脚本：
+### 安装到项目
+
+#### 方法一：自动安装（推荐）
 
 ```bash
 python install.py
 ```
 
 安装脚本会：
-- 自动检测你的操作系统（Windows/Linux/macOS）
+- 检测你的操作系统
 - 询问目标项目路径
 - 复制所有必要文件
 - 生成适合你系统的 settings.json
-- 引导你完成环境变量设置
+- 引导完成环境变量设置
 - 运行诊断验证安装
 
 #### 方法二：手动安装
 
-将以下文件复制到你的项目目录：
-
 ```bash
 # 复制整个 .claude 目录到你的项目根目录
-cp -r .claude /path/to/your/project/
-```
+cp -r .claude /path/to/your-project/
 
-**项目结构：**
-```
-your-project/
-├── .claude/
-│   ├── hooks/
-│   │   └── pushover-hook/
-│   │       ├── pushover-notify.py
-│   │       ├── test-pushover.py
-│   │       ├── diagnose.py
-│   │       └── README.md
-│   ├── cache/
-│   └── settings.json
-└── README.md
-```
-
-### 4. 设置执行权限（Linux/macOS）
-
-```bash
+# Linux/macOS 设置执行权限
 chmod +x .claude/hooks/pushover-hook/*.py
 ```
 
-### 5. 验证安装
-
-**运行诊断脚本：**
+### 验证安装
 
 ```bash
+# 运行诊断脚本
 python .claude/hooks/pushover-hook/diagnose.py
-```
 
-**发送测试通知：**
-
-```bash
+# 发送测试通知
 python .claude/hooks/pushover-hook/test-pushover.py
-```
 
-### 6. 手动测试（可选）
-
-手动测试 hook 是否正常工作：
-
-**Windows (PowerShell):**
-```powershell
-# 使用你当前项目的实际路径
-'{"hook_event_name":"Stop","session_id":"test123","cwd":"C:\WorkSpace\YourProject"}' | python .claude\hooks\pushover-hook\pushover-notify.py
-```
-
-**Windows (CMD):**
-```cmd
-echo {"hook_event_name":"Stop","session_id":"test123","cwd":"C:\WorkSpace\YourProject"} | python .claude\hooks\pushover-hook\pushover-notify.py
-```
-
-**Linux/macOS:**
-```bash
+# 手动测试 Hook
 echo '{"hook_event_name":"Stop","session_id":"test123","cwd":"/path/to/project"}' | \
-  .claude/hooks/pushover-hook/pushover-notify.py
+  python .claude/hooks/pushover-hook/pushover-notify.py
 ```
 
-你应该在 Pushover 上收到一条测试通知。
+### 通知场景
 
-## 使用方法
+| 场景 | 优先级 | 示例 |
+|------|--------|------|
+| **任务完成** | 0 (正常) | `[ProjectName] Task Complete` |
+| **需要关注** | 1 (高) | `[ProjectName] Attention Needed` |
+| **权限请求** | 1 (高) | 需要批准运行命令或修改文件 |
 
-安装完成后，hook 会自动在以下场景发送通知：
+### 项目级禁用通知
 
-### 场景 1: 任务完成
-
-当 Claude Code 完成一个任务并停止响应时，你会收到类似这样的通知：
-
-```
-[cc-pushover-hook] Task Complete
-Session: abc123def456
-Summary: Implemented user authentication feature
-```
-
-### 场景 2: 需要关注
-
-当 Claude Code 需要你的人工干预时（如权限请求、Plan 模式询问等），你会收到高优先级通知：
-
-```
-[cc-pushover-hook] Attention Needed
-Session: abc123def456
-Type: permission_prompt
-Claude Code needs your attention
-```
-
-**通知类型说明：**
-- `permission_prompt` - 需要权限批准（如运行命令、修改文件）
-- `elicitation_dialog` - MCP 工具配置对话框
-- `auth_success` - 认证成功通知
-- 其他需要交互的通知类型
-
-**已过滤的通知类型：**
-- `idle_prompt` - CLI 空闲 60+ 秒的提醒（已自动过滤，不会发送通知）
-
-## 配置选项
-
-### 禁用项目通知
-
-如果您想临时禁用某个项目的所有通知，只需在项目根目录创建一个 `.no-pushover` 文件：
-
-**Windows:**
-```cmd
-type nul > .no-pushover
-```
-
-**Linux/macOS:**
 ```bash
-touch .no-pushover
+# 禁用 Pushover 通知
+touch .no-pushover          # Linux/macOS
+type nul > .no-pushover     # Windows
+
+# 禁用 Windows 本地通知
+touch .no-windows           # Linux/macOS
+type nul > .no-windows      # Windows
+
+# 恢复通知 - 删除对应文件即可
+rm .no-pushover .no-windows
 ```
 
-删除该文件即可恢复通知：
+---
 
-**Windows:**
-```cmd
-del .no-pushover
+## 开发者集成指南
+
+### 概述
+
+`pushover-notify.py` 是一个独立的 Python 脚本，可以通过 **标准输入 (stdin)** 接收 JSON 格式的触发事件，实现应用集成。
+
+### 接口规范
+
+#### 输入格式 (stdin JSON)
+
+```json
+{
+  "hook_event_name": "Stop|UserPromptSubmit|Notification",
+  "session_id": "unique_session_identifier",
+  "cwd": "/path/to/working/directory",
+  "prompt": "user_message_content",        // UserPromptSubmit 时使用
+  "notification_type": "type_name",        // Notification 时使用
+  "message": "notification_message",       // Notification 时使用
+  "timestamp": "2024-01-01T12:00:00Z"
+}
 ```
 
-**Linux/macOS:**
+#### 事件类型
+
+| 事件 | 触发时机 | 行为 |
+|------|----------|------|
+| `UserPromptSubmit` | 用户提交消息时 | 缓存用户输入到 `.claude/cache/` |
+| `Stop` | 会话结束时 | 发送任务完成通知，清理缓存 |
+| `Notification` | 需要关注时 | 发送高优先级通知（排除 idle_prompt） |
+
+### 集成示例
+
+#### Python 集成
+
+```python
+import subprocess
+import json
+import os
+
+def send_notification(event_type: str, session_id: str, project_path: str, **kwargs):
+    """调用 pushover-notify.py 发送通知"""
+    hook_script = os.path.join(
+        os.path.dirname(__file__),
+        ".claude/hooks/pushover-hook/pushover-notify.py"
+    )
+
+    payload = {
+        "hook_event_name": event_type,
+        "session_id": session_id,
+        "cwd": project_path,
+        **kwargs
+    }
+
+    result = subprocess.run(
+        ["python", hook_script],
+        input=json.dumps(payload),
+        capture_output=True,
+        text=True,
+        encoding="utf-8"
+    )
+
+    return result.returncode == 0
+
+# 使用示例
+send_notification(
+    event_type="Stop",
+    session_id="sess-123",
+    project_path="/path/to/project"
+)
+```
+
+#### Node.js 集成
+
+```javascript
+const { spawn } = require('child_process');
+const path = require('path');
+
+function sendNotification(eventType, sessionId, projectPath, extra = {}) {
+  const hookScript = path.join(__dirname, '.claude/hooks/pushover-hook/pushover-notify.py');
+  const payload = {
+    hook_event_name: eventType,
+    session_id: sessionId,
+    cwd: projectPath,
+    ...extra
+  };
+
+  return new Promise((resolve) => {
+    const child = spawn('python', [hookScript], {
+      stdio: ['pipe', 'inherit', 'inherit']
+    });
+
+    child.stdin.write(JSON.stringify(payload));
+    child.stdin.end();
+
+    child.on('close', (code) => resolve(code === 0));
+  });
+}
+
+// 使用示例
+await sendNotification('Stop', 'sess-123', '/path/to/project');
+```
+
+#### Bash 集成
+
 ```bash
-rm .no-pushover
+#!/bin/bash
+# send-notification.sh
+
+HOOK_SCRIPT=".claude/hooks/pushover-hook/pushover-notify.py"
+PROJECT_PATH="$(pwd)"
+SESSION_ID="sess-$(date +%s)"
+
+# 发送 Stop 通知
+echo "{
+  \"hook_event_name\": \"Stop\",
+  \"session_id\": \"$SESSION_ID\",
+  \"cwd\": \"$PROJECT_PATH\"
+}" | python "$HOOK_SCRIPT"
 ```
 
-**特点：**
-- 每个项目独立控制，不影响其他项目
-- 操作简单，无需修改配置文件
-- 会在 debug.log 中记录禁用状态
+#### Go 集成
 
-### 修改通知优先级
+```go
+package main
 
-编辑 `.claude/hooks/pushover-hook/pushover-notify.py`，修改 `priority` 参数：
+import (
+    "bytes"
+    "encoding/json"
+    "os/exec"
+)
 
-| 优先级 | 说明 |
-|--------|------|
-| -2 | 最低优先级，静默通知 |
-| -1 | 低优先级 |
-| 0 | 正常优先级（默认） |
-| 1 | 高优先级（需要关注通知使用） |
-| 2 | 紧急，会持续提醒 |
+type HookPayload struct {
+    HookEventName string `json:"hook_event_name"`
+    SessionID     string `json:"session_id"`
+    CWD           string `json:"cwd"`
+}
 
-### 禁用特定通知
+func SendNotification(eventType, sessionID, cwd string) error {
+    payload := HookPayload{
+        HookEventName: eventType,
+        SessionID:     sessionID,
+        CWD:           cwd,
+    }
 
-编辑 `.claude/settings.json`，删除不需要的 hook 配置：
+    data, _ := json.Marshal(payload)
+    cmd := exec.Command("python", ".claude/hooks/pushover-hook/pushover-notify.py")
+    cmd.Stdin = bytes.NewReader(data)
+
+    return cmd.Run()
+}
+```
+
+### Claude Code Hook 配置
+
+在 `.claude/settings.json` 中配置：
 
 ```json
 {
   "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "set PYTHONIOENCODING=utf-8&& python \"$CLAUDE_PROJECT_DIR/.claude/hooks/pushover-hook/pushover-notify.py\""
+          }
+        ]
+      }
+    ],
     "Stop": [
       {
         "hooks": [
           {
             "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/pushover-hook/pushover-notify.py"
+            "command": "set PYTHONIOENCODING=utf-8&& python \"$CLAUDE_PROJECT_DIR/.claude/hooks/pushover-hook/pushover-notify.py\""
+          }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "set PYTHONIOENCODING=utf-8&& python \"$CLAUDE_PROJECT_DIR/.claude/hooks/pushover-hook/pushover-notify.py\""
           }
         ]
       }
     ]
-    // 只保留 Stop 通知，移除其他
   }
 }
 ```
 
+### 通知优先级说明
+
+| 优先级值 | 说明 | 适用场景 |
+|----------|------|----------|
+| -2 | 最低优先级，静默通知 | 后台任务 |
+| -1 | 低优先级 | 信息性消息 |
+| 0 | 正常优先级（默认） | 任务完成 |
+| 1 | 高优先级 | 需要关注、权限请求 |
+| 2 | 紧急，会持续提醒 | 关键错误 |
+
+### Windows 编码注意事项
+
+在 Windows 系统调用脚本时，需设置 `PYTHONIOENCODING=utf-8`：
+
+```json
+"command": "set PYTHONIOENCODING=utf-8&& python \"path/to/pushover-notify.py\""
+```
+
+或在调用代码中设置：
+
+```python
+env = os.environ.copy()
+env["PYTHONIOENCODING"] = "utf-8"
+subprocess.run(cmd, env=env)
+```
+
+---
+
+## 配置选项
+
+### 通知优先级修改
+
+编辑 `pushover-notify.py`，修改 `send_notifications()` 调用时的 `priority` 参数。
+
+### 禁用特定 Hook
+
+编辑 `.claude/settings.json`，删除不需要的 hook 配置。
+
+### 日志管理
+
+- 日志位置：`.claude/hooks/pushover-hook/debug.log`
+- 日志轮转：自动保留 3 天
+- 历史日志格式：`debug.YYYY-MM-DD.log`
+
+---
+
 ## 故障排查
 
-### 没有收到通知
-
-**使用诊断脚本快速排查：**
+### 诊断工具
 
 ```bash
+# 运行完整诊断
 python .claude/hooks/pushover-hook/diagnose.py
+
+# 查看调试日志
+cat .claude/hooks/pushover-hook/debug.log
 ```
 
-诊断脚本会检查：
-- 环境变量是否设置
-- Python 是否可用
-- Hook 脚本是否存在
-- Settings 配置是否正确
+### 常见问题
 
-**手动检查清单：**
+| 问题 | 原因 | 解决方案 |
+|------|------|----------|
+| 没有收到通知 | 环境变量未设置 | 检查 `PUSHOVER_TOKEN` 和 `PUSHOVER_USER` |
+| 中文乱码 | 编码问题 | 设置 `PYTHONIOENCODING=utf-8` |
+| 通知显示 `{}` | 旧版本 bug | 更新到最新版本 |
+| Windows 通知不工作 | PowerShell 执行策略 | 检查 BurntToast 模块安装 |
 
-1. **环境变量是否正确设置**
-   ```bash
-   # Windows
-   echo $env:PUSHOVER_TOKEN
-   echo $env:PUSHOVER_USER
+### 手动验证
 
-   # Linux/macOS
-   echo $PUSHOVER_TOKEN
-   echo $PUSHOVER_USER
-   ```
-
-2. **发送测试通知**
-   ```bash
-   python .claude/hooks/pushover-hook/test-pushover.py
-   ```
-
-3. **查看调试日志**
-   ```bash
-   cat .claude/hooks/pushover-hook/debug.log
-   ```
-
-4. **Token 和 User Key 是否有效**
-   - 登录 Pushover.net 确认凭证
-   - 尝试重新生成凭证
-
-5. **网络连接是否正常**
-   ```bash
-   curl -I https://api.pushover.net
-   ```
-
-### 摘要生成失败
-
-如果通知显示的是原始用户消息而不是 AI 摘要：
-
-1. **检查 Claude CLI 是否安装**
-   ```bash
-   claude --version
-   ```
-
-2. **检查 CLI 是否在 PATH 中**
-   ```bash
-   which claude  # Linux/macOS
-   where claude  # Windows
-   ```
-
-3. **查看 CLI 配置是否正确**
-   ```bash
-   claude auth status
-   ```
-
-### 缓存文件未清理
-
-如果 `.claude/cache/` 目录残留文件：
-
-**Linux/macOS:**
 ```bash
-rm -rf .claude/cache/*
+# 验证环境变量
+echo $PUSHOVER_TOKEN   # Linux/macOS
+echo $env:PUSHOVER_TOKEN  # Windows PowerShell
+
+# 验证网络连接
+curl -I https://api.pushover.net
+
+# 验证 Python
+python --version  # 需要 3.6+
 ```
 
-**Windows:**
-```powershell
-Remove-Item -Recurse -Force .claude\cache\*
-```
+---
 
-## 安全说明
-
-- **密钥安全**：Pushover 凭证存储在环境变量中，不会写入代码或配置文件
-- **缓存清理**：对话缓存在任务完成后自动删除
-- **静默失败**：通知发送失败不会影响 Claude Code 正常运行
-
-## 项目文件说明
+## 项目结构
 
 ```
 .claude/
@@ -342,56 +433,27 @@ Remove-Item -Recurse -Force .claude\cache\*
 │       ├── debug.log             # 调试日志（运行时生成）
 │       └── README.md             # 详细文档
 ├── cache/                         # 会话缓存目录（自动清理）
-│   └── session-{id}.jsonl         # 会话缓存文件
+│   └── session-{id}.jsonl
 └── settings.json                  # Hook 配置文件
 install.py                         # 自动安装脚本
 ```
+
+---
+
+## 安全说明
+
+- 密钥存储在环境变量中，不写入代码或配置文件
+- 对话缓存在任务完成后自动删除
+- 通知发送失败不影响应用正常运行
+
+---
 
 ## 许可证
 
 MIT License
 
+---
+
 ## 贡献
 
 欢迎提交 Issue 和 Pull Request！
-
-## 编码故障排查
-
-### 中文显示为乱码
-
-如果中文或其他非 ASCII 字符在通知中显示为乱码：
-
-1. **验证 Python 版本** - 需要 Python 3.7+ 才能支持 `sys.stdin.reconfigure()`
-   ```bash
-   python --version
-   ```
-
-2. **检查 hook 命令是否包含编码变量** - 在 `.claude/settings.json` 中：
-   ```json
-   "command": "set PYTHONIOENCODING=utf-8&& \"$CLAUDE_PROJECT_DIR/.claude/hooks/pushover-hook/pushover-notify.py\""
-   ```
-
-3. **运行编码测试**：
-   ```bash
-   cd .claude/hooks/pushover-hook && python test-encoding-manual.py
-   ```
-
-4. **检查调试日志** - 查看 `.claude/hooks/pushover-hook/debug.log` 中的内容：
-   ```
-   [时间戳] Stdin encoding configured: utf-8
-   [时间戳] Message stats: chars=XX, bytes=YY
-   ```
-
-### 通知内容显示为 `{}`
-
-如果通知正文显示字面量 `{}` 而不是有意义的消息：
-
-1. 此问题已在更新后的脚本中修复
-2. 更新到最新版本：`git pull` 或重新安装 hooks
-3. 验证 `pushover-notify.py` 包含改进的消息体处理逻辑（约第 343-349 行）
-
-### Windows 特定说明
-
-- Windows 控制台默认使用 CP936/GBK（中文）或 CP1252（英文）编码
-- 在 Windows 上，`PYTHONIOENCODING=utf-8` 覆盖设置至关重要
-- CMD 和 PowerShell 都支持 `set VAR=value&& command` 语法
