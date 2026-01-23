@@ -332,7 +332,9 @@ def _send_pushover_internal(title: str, message: str, priority: int = 0, cwd: st
 
 def send_notifications(title: str, message: str, priority: int = 0, cwd: str = "") -> dict:
     """
-    Send notifications via enabled channels.
+    Send notifications via enabled channels in parallel.
+
+    Windows local notifications display immediately without waiting for Pushover API.
 
     Args:
         title: Notification title
@@ -353,15 +355,26 @@ def send_notifications(title: str, message: str, priority: int = 0, cwd: str = "
         log("All notifications disabled (.no-pushover and .no-windows both exist)")
         return results
 
-    # Send Pushover if enabled
-    if not pushover_disabled:
-        results["pushover"] = _send_pushover_internal(title, message, priority, cwd)
+    futures = {}
 
-    # Send Windows notification if enabled and on Windows
-    if not windows_disabled and sys.platform == "win32":
-        results["windows"] = send_windows_notification(title, message)
-    elif not windows_disabled and sys.platform != "win32":
-        log("Windows native notification not supported on this platform")
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        if not pushover_disabled:
+            log("Starting Pushover notification thread")
+            futures["pushover"] = executor.submit(_send_pushover_internal, title, message, priority, cwd)
+
+        if not windows_disabled and sys.platform == "win32":
+            log("Starting Windows notification thread")
+            futures["windows"] = executor.submit(send_windows_notification, title, message)
+        elif not windows_disabled and sys.platform != "win32":
+            log("Windows native notification not supported on this platform")
+
+        for name, future in futures.items():
+            try:
+                results[name] = future.result(timeout=10)
+                log(f"{name.capitalize()} notification thread completed: {results[name]}")
+            except Exception as e:
+                log(f"ERROR: {name} notification thread failed: {e}")
+                results[name] = False
 
     return results
 
