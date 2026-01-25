@@ -3,21 +3,31 @@
 Cross-platform installer for Claude Code Pushover notification hook.
 
 Usage:
-    python install.py
+    python install.py [OPTIONS]
+
+Options:
+    -t, --target-dir PATH    Target project directory (required for non-interactive mode)
+    --force                  Force reinstall, overwrite existing files
+    --non-interactive        Non-interactive mode, don't ask for confirmation
+    --skip-diagnostics       Skip post-install diagnostics
+    --quiet                  Quiet mode, reduce output
+    --version                Show version information
 
 The script will:
 1. Detect your platform (Windows/Linux/macOS)
-2. Ask for the target project directory
+2. Ask for the target project directory (or use --target-dir)
 3. Copy all necessary files
 4. Generate platform-specific settings.json
 5. Guide you through environment variable setup
-6. Run diagnostics to verify installation
+6. Run diagnostics to verify installation (unless --skip-diagnostics)
 """
 
 import os
 import shutil
 import sys
 import json
+import argparse
+import subprocess
 from pathlib import Path
 from platform import system
 
@@ -25,14 +35,123 @@ from platform import system
 class Installer:
     """Cross-platform installer for Pushover hook."""
 
-    def __init__(self):
+    VERSION = "1.0.0"
+
+    def get_version_from_git(self) -> str:
+        """
+        Get version from git tags.
+
+        Returns:
+            Version string from git describe, or commit hash, or fallback VERSION
+        """
+        try:
+            # Try git describe --tags --always first
+            result = subprocess.run(
+                ['git', 'describe', '--tags', '--always'],
+                cwd=self.script_dir,
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                return result.stdout.strip()
+
+            # Fallback to git rev-parse --short HEAD
+            result = subprocess.run(
+                ['git', 'rev-parse', '--short', 'HEAD'],
+                cwd=self.script_dir,
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                return result.stdout.strip()
+
+        except (subprocess.TimeoutExpired, FileNotFoundError, Exception):
+            pass
+
+        # Ultimate fallback to hardcoded VERSION
+        return self.VERSION
+
+    def __init__(self, args=None):
         self.platform = system()
         self.script_dir = Path(__file__).parent.resolve()
         self.target_dir = None
         self.hook_dir = None
+        self.args = args
+
+        # Parse command line arguments
+        self.parser = self._create_argument_parser()
+        self.parsed_args = self.parser.parse_args(args)
+
+        # Set version after script_dir is initialized
+        self.version = self.get_version_from_git()
+
+        # Debug: print received args
+        import sys
+        print(f"[DEBUG] sys.argv: {sys.argv}", file=sys.stderr)
+        print(f"[DEBUG] args parameter: {args}", file=sys.stderr)
+
+        # Debug: print parsed args
+        print(f"[DEBUG] parsed_args.target_dir: {self.parsed_args.target_dir}", file=sys.stderr)
+        print(f"[DEBUG] parsed_args.non_interactive: {self.parsed_args.non_interactive}", file=sys.stderr)
+
+    def _create_argument_parser(self):
+        """Create command line argument parser."""
+        parser = argparse.ArgumentParser(
+            description="Install Claude Code Pushover notification hook",
+            formatter_class=argparse.RawDescriptionHelpFormatter
+        )
+        parser.add_argument(
+            "-t", "--target-dir",
+            type=str,
+            help="Target project directory (required for non-interactive mode)"
+        )
+        parser.add_argument(
+            "--force",
+            action="store_true",
+            help="Force reinstall, overwrite existing files"
+        )
+        parser.add_argument(
+            "--non-interactive",
+            action="store_true",
+            help="Non-interactive mode, don't ask for confirmation"
+        )
+        parser.add_argument(
+            "--skip-diagnostics",
+            action="store_true",
+            help="Skip post-install diagnostics"
+        )
+        parser.add_argument(
+            "--quiet",
+            action="store_true",
+            help="Quiet mode, reduce output"
+        )
+        parser.add_argument(
+            "--version",
+            action="version",
+            version=f"%(prog)s {self.VERSION}"
+        )
+        return parser
+
+    def is_quiet(self):
+        """Check if quiet mode is enabled."""
+        return self.parsed_args.quiet
+
+    def is_non_interactive(self):
+        """Check if non-interactive mode is enabled."""
+        return self.parsed_args.non_interactive
+
+    def print_info(self, message):
+        """Print info message unless in quiet mode."""
+        if not self.is_quiet():
+            print(message)
 
     def print_banner(self) -> None:
         """Print installation banner."""
+        if self.is_non_interactive():
+            return
+
         print(r"""
      ____  _____ ____     ___   _   _  ____ _____ ___ ___  _   _
     |  _ \| ____|  _ \   / _ \ / \ | |/ ___|_   _|_ _/ _ \| \ | |
@@ -46,7 +165,46 @@ class Installer:
         print()
 
     def get_target_directory(self) -> Path:
-        """Ask user for target project directory."""
+        """Get target project directory from args or user input."""
+        # Check if target dir is provided via command line
+        if self.parsed_args.target_dir:
+            target = Path(self.parsed_args.target_dir).resolve()
+            if not target.exists():
+                if self.is_non_interactive():
+                    print(json.dumps({
+                        "status": "error",
+                        "message": f"Target directory does not exist: {target}"
+                    }))
+                    sys.exit(1)
+                response = input(f"Directory does not exist: {target}\nCreate it? (y/n): ").lower()
+                if response == 'y':
+                    target.mkdir(parents=True, exist_ok=True)
+                else:
+                    sys.exit(1)
+
+            # Check if writable
+            test_file = target / ".write_test"
+            try:
+                test_file.touch()
+                test_file.unlink()
+            except Exception as e:
+                print(json.dumps({
+                    "status": "error",
+                    "message": f"Cannot write to directory: {e}"
+                }))
+                sys.exit(1)
+
+            self.print_info(f"[OK] Target directory: {target}")
+            return target
+
+        # Interactive mode
+        if self.is_non_interactive():
+            print(json.dumps({
+                "status": "error",
+                "message": "Target directory required in non-interactive mode. Use --target-dir"
+            }))
+            sys.exit(1)
+
         print("[Step 1/5] Target Project Directory")
         print("-" * 60)
         print("Enter the path to your Claude Code project.")
@@ -83,8 +241,8 @@ class Installer:
 
     def create_hook_directory(self) -> None:
         """Create the .claude/hooks/pushover-hook directory structure."""
-        print("\n[Step 2/5] Creating Hook Directory")
-        print("-" * 60)
+        self.print_info("\n[Step 2/5] Creating Hook Directory")
+        self.print_info("-" * 60)
 
         self.hook_dir = self.target_dir / ".claude" / "hooks" / "pushover-hook"
         cache_dir = self.target_dir / ".claude" / "cache"
@@ -92,16 +250,19 @@ class Installer:
         try:
             self.hook_dir.mkdir(parents=True, exist_ok=True)
             cache_dir.mkdir(parents=True, exist_ok=True)
-            print(f"[OK] Created: {self.hook_dir}")
-            print(f"[OK] Created: {cache_dir}")
+            self.print_info(f"[OK] Created: {self.hook_dir}")
+            self.print_info(f"[OK] Created: {cache_dir}")
         except Exception as e:
-            print(f"[ERROR] Failed to create directories: {e}")
+            print(json.dumps({
+                "status": "error",
+                "message": f"Failed to create directories: {e}"
+            }))
             sys.exit(1)
 
     def copy_hook_files(self) -> None:
         """Copy hook script files to target directory and cleanup old files."""
-        print("\n[Step 3/5] Copying Hook Files")
-        print("-" * 60)
+        self.print_info("\n[Step 3/5] Copying Hook Files")
+        self.print_info("-" * 60)
 
         # Detect old files from previous installation
         old_hooks_dir = self.target_dir / ".claude" / "hooks"
@@ -150,7 +311,7 @@ class Installer:
             target = self.hook_dir / filename
 
             if not source.exists():
-                print(f"[WARN] Source file not found: {filename}")
+                self.print_info(f"[WARN] Source file not found: {filename}")
                 continue
 
             try:
@@ -158,30 +319,37 @@ class Installer:
                 # Make scripts executable on Unix
                 if self.platform != "Windows" and filename.endswith(".py"):
                     target.chmod(0o755)
-                print(f"[OK] Copied: {filename}")
+                self.print_info(f"[OK] Copied: {filename}")
                 copied += 1
             except Exception as e:
-                print(f"[ERROR] Failed to copy {filename}: {e}")
+                print(json.dumps({
+                    "status": "error",
+                    "message": f"Failed to copy {filename}: {e}"
+                }))
+                sys.exit(1)
 
         if copied == 0:
-            print("[ERROR] No files were copied!")
+            print(json.dumps({
+                "status": "error",
+                "message": "No files were copied!"
+            }))
             sys.exit(1)
 
         # Cleanup old files after successful copy
         if copied > 0 and existing_old_files:
-            print(f"\n[INFO] Cleaning up {len(existing_old_files)} old file(s)...")
+            self.print_info(f"\n[INFO] Cleaning up {len(existing_old_files)} old file(s)...")
             for old_file in existing_old_files:
                 try:
                     if old_file.is_dir():
                         shutil.rmtree(old_file)
                     else:
                         old_file.unlink()
-                    print(f"[OK] Removed: {old_file.name}")
+                    self.print_info(f"[OK] Removed: {old_file.name}")
                 except Exception as e:
-                    print(f"[WARN] Failed to remove {old_file.name}: {e}")
-                    print(f"[INFO] Please manually remove: {old_file}")
+                    self.print_info(f"[WARN] Failed to remove {old_file.name}: {e}")
+                    self.print_info(f"[INFO] Please manually remove: {old_file}")
         elif copied > 0:
-            print("\n[INFO] No old files found (fresh install or already cleaned)")
+            self.print_info("\n[INFO] No old files found (fresh install or already cleaned)")
 
     def backup_settings(self, settings_path: Path) -> None:
         """Create a backup of existing settings.json."""
@@ -190,33 +358,21 @@ class Installer:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             backup_path = settings_path.parent / f"settings.json.backup_{timestamp}"
             shutil.copy2(settings_path, backup_path)
-            print(f"[OK] Backed up existing settings.json to:")
-            print(f"     {backup_path.name}")
+            self.print_info(f"[OK] Backed up existing settings.json to:")
+            self.print_info(f"     {backup_path.name}")
         except Exception as e:
-            print(f"[WARN] Failed to backup settings.json: {e}")
+            self.print_info(f"[WARN] Failed to backup settings.json: {e}")
 
     def merge_hook_configs(self, existing_hooks: dict, new_hooks: dict) -> dict:
         """
         Merge new hook configurations into existing ones.
-
-        This function intelligently replaces old pushover hook configurations
-        with new ones to prevent duplicates when command formats differ.
-
-        Args:
-            existing_hooks: Existing hooks configuration
-            new_hooks: New hooks configuration to add
-
-        Returns:
-            Merged hooks configuration
         """
         merged = existing_hooks.copy()
 
         for event_name, event_configs in new_hooks.items():
             if event_name not in merged:
-                # Event doesn't exist, add it
                 merged[event_name] = event_configs
             else:
-                # Event exists, check for pushover hooks to replace
                 for new_event_config in event_configs:
                     new_hooks_list = new_event_config.get("hooks", [])
                     new_has_pushover = any(
@@ -225,7 +381,6 @@ class Installer:
                     )
 
                     if new_has_pushover:
-                        # Remove existing pushover hooks for this event
                         filtered_configs = []
                         removed_count = 0
                         for existing_event_config in merged[event_name]:
@@ -242,12 +397,10 @@ class Installer:
                         merged[event_name] = filtered_configs
 
                         if removed_count > 0:
-                            print(f"[INFO] Replaced {removed_count} old pushover hook(s) for {event_name}")
+                            self.print_info(f"[INFO] Replaced {removed_count} old pushover hook(s) for {event_name}")
 
-                        # Add new configuration
                         merged[event_name].append(new_event_config)
                     else:
-                        # Non-pushover hook, check for exact match
                         found = False
                         for existing_event_config in merged[event_name]:
                             if existing_event_config.get("hooks") == new_event_config.get("hooks"):
@@ -257,31 +410,22 @@ class Installer:
                         if not found:
                             merged[event_name].append(new_event_config)
                         else:
-                            print(f"[INFO] Hook already exists for {event_name}, skipping")
+                            self.print_info(f"[INFO] Hook already exists for {event_name}, skipping")
 
         return merged
 
     def generate_settings_json(self) -> None:
         """Generate or merge platform-specific settings.json."""
-        print("\n[Step 4/5] Generating Configuration")
-        print("-" * 60)
+        self.print_info("\n[Step 4/5] Generating Configuration")
+        self.print_info("-" * 60)
 
-        # Determine the command format based on platform
-        # NOTE: $CLAUDE_PROJECT_DIR environment variable expansion is broken on Windows (see GitHub issues #6023, #5648)
-        # Workaround: Use absolute path directly instead of relying on environment variable expansion
         hook_script_path = self.hook_dir / "pushover-notify.py"
 
         if self.platform == "Windows":
-            # Windows: need to use python command with absolute path
-            # Convert to absolute path and use forward slashes (Python on Windows handles them correctly)
-            # Also set PYTHONIOENCODING to ensure UTF-8 output on Windows
             command = f"set PYTHONIOENCODING=utf-8&& python \"{hook_script_path}\""
         else:
-            # Unix: can use shebang with absolute path
-            # Set PYTHONIOENCODING for consistency
             command = f"PYTHONIOENCODING=utf-8 \"{hook_script_path}\""
 
-        # New Pushover hook configuration
         pushover_hooks = {
             "UserPromptSubmit": [
                 {
@@ -318,102 +462,97 @@ class Installer:
 
         settings_path = self.target_dir / ".claude" / "settings.json"
 
-        # Check if settings.json already exists
         if settings_path.exists():
-            print(f"[INFO] Existing settings.json found")
+            self.print_info(f"[INFO] Existing settings.json found")
             try:
                 with open(settings_path, 'r', encoding='utf-8') as f:
                     existing_settings = json.load(f)
 
-                # Backup existing settings
                 self.backup_settings(settings_path)
 
-                # Merge hooks
                 existing_hooks = existing_settings.get("hooks", {})
                 merged_hooks = self.merge_hook_configs(existing_hooks, pushover_hooks)
 
-                # Update settings with merged hooks
                 existing_settings["hooks"] = merged_hooks
 
-                # Write merged settings
                 with open(settings_path, 'w', encoding='utf-8') as f:
                     json.dump(existing_settings, f, indent=2, ensure_ascii=False)
 
-                print(f"[OK] Merged Pushover hooks into existing settings.json")
-                print(f"[INFO] Platform: {self.platform}")
-                print(f"[INFO] Command: {command}")
-                print(f"[INFO] Your existing hook configurations are preserved")
+                self.print_info(f"[OK] Merged Pushover hooks into existing settings.json")
+                self.print_info(f"[INFO] Platform: {self.platform}")
+                self.print_info(f"[INFO] Command: {command}")
 
             except json.JSONDecodeError as e:
-                print(f"[ERROR] Existing settings.json is invalid: {e}")
-                print(f"[INFO] Creating new settings.json...")
-                raise
+                print(json.dumps({
+                    "status": "error",
+                    "message": f"Existing settings.json is invalid: {e}"
+                }))
+                sys.exit(1)
             except Exception as e:
-                print(f"[ERROR] Failed to merge settings.json: {e}")
-                print(f"[INFO] Creating new settings.json...")
-                raise
+                print(json.dumps({
+                    "status": "error",
+                    "message": f"Failed to merge settings.json: {e}"
+                }))
+                sys.exit(1)
         else:
-            # Create new settings.json
             settings = {"hooks": pushover_hooks}
             try:
                 with open(settings_path, 'w', encoding='utf-8') as f:
                     json.dump(settings, f, indent=2, ensure_ascii=False)
-                print(f"[OK] Created: {settings_path}")
-                print(f"[INFO] Platform: {self.platform}")
-                print(f"[INFO] Command: {command}")
+                self.print_info(f"[OK] Created: {settings_path}")
+                self.print_info(f"[INFO] Platform: {self.platform}")
+                self.print_info(f"[INFO] Command: {command}")
             except Exception as e:
-                print(f"[ERROR] Failed to create settings.json: {e}")
+                print(json.dumps({
+                    "status": "error",
+                    "message": f"Failed to create settings.json: {e}"
+                }))
                 sys.exit(1)
 
     def show_env_instructions(self) -> None:
         """Show environment variable setup instructions."""
-        print("\n[Step 5/5] Environment Variables")
-        print("-" * 60)
-        print("You need to set the following environment variables:")
-        print()
-        print("  PUSHOVER_TOKEN  - Your Pushover application token")
-        print("  PUSHOVER_USER   - Your Pushover user key")
-        print()
-        print("Get them from:")
-        print("  - Token: https://pushover.net/apps")
-        print("  - User:  https://pushover.net/")
-        print()
-        print("Set them using:")
-        print()
+        if self.is_non_interactive():
+            return
+
+        self.print_info("\n[Step 5/5] Environment Variables")
+        self.print_info("-" * 60)
+        self.print_info("You need to set the following environment variables:")
+        self.print_info()
+        self.print_info("  PUSHOVER_TOKEN  - Your Pushover application token")
+        self.print_info("  PUSHOVER_USER   - Your Pushover user key")
+        self.print_info()
+        self.print_info("Get them from:")
+        self.print_info("  - Token: https://pushover.net/apps")
+        self.print_info("  - User:  https://pushover.net/")
+        self.print_info()
+        self.print_info("Set them using:")
+        self.print_info()
 
         if self.platform == "Windows":
-            print("  # Command Prompt (temporary)")
-            print("  set PUSHOVER_TOKEN=your_token_here")
-            print("  set PUSHOVER_USER=your_user_key_here")
-            print()
-            print("  # PowerShell (temporary)")
-            print("  $env:PUSHOVER_TOKEN=\"your_token_here\"")
-            print("  $env:PUSHOVER_USER=\"your_user_key_here\"")
-            print()
-            print("  # Permanent (System Environment Variables)")
-            print("  1. Search for 'Environment Variables' in Windows")
-            print("  2. Click 'Edit the system environment variables'")
-            print("  3. Click 'Environment Variables'")
-            print("  4. Add new variables under User variables")
+            self.print_info("  # Command Prompt (temporary)")
+            self.print_info("  set PUSHOVER_TOKEN=your_token_here")
+            self.print_info("  set PUSHOVER_USER=your_user_key_here")
+            self.print_info()
+            self.print_info("  # PowerShell (temporary)")
+            self.print_info("  $env:PUSHOVER_TOKEN=\"your_token_here\"")
+            self.print_info("  $env:PUSHOVER_USER=\"your_user_key_here\"")
         else:
-            # Linux/macOS
             shell = os.environ.get("SHELL", "bash")
-            if "zsh" in shell:
-                rc_file = "~/.zshrc"
-            else:
-                rc_file = "~/.bashrc"
-
-            print(f"  # Temporary (current session only)")
-            print("  export PUSHOVER_TOKEN=your_token_here")
-            print("  export PUSHOVER_USER=your_user_key_here")
-            print()
-            print(f"  # Permanent (add to {rc_file})")
-            print("  echo 'export PUSHOVER_TOKEN=your_token_here' >> ~/.bashrc")
-            print("  echo 'export PUSHOVER_USER=your_user_key_here' >> ~/.bashrc")
-            print("  source ~/.bashrc")
+            rc_file = "~/.zshrc" if "zsh" in shell else "~/.bashrc"
+            self.print_info(f"  # Temporary (current session only)")
+            self.print_info("  export PUSHOVER_TOKEN=your_token_here")
+            self.print_info("  export PUSHOVER_USER=your_user_key_here")
+            self.print_info()
+            self.print_info(f"  # Permanent (add to {rc_file})")
 
     def run_verification(self) -> None:
         """Run diagnostic script to verify installation."""
+        if self.parsed_args.skip_diagnostics:
+            return
+
+        if self.is_non_interactive():
+            return
+
         print("\n" + "=" * 60)
         print("Installation Complete!")
         print("=" * 60)
@@ -442,7 +581,6 @@ class Installer:
         print("4. Trigger a Claude Code task and check for notifications!")
         print()
 
-        # Ask if user wants to run diagnostics now
         response = input("Run diagnostics now? (y/n): ").lower()
         if response == 'y':
             diagnose_script = self.hook_dir / "diagnose.py"
@@ -464,28 +602,46 @@ class Installer:
 
     def run(self) -> None:
         """Run the full installation process."""
-        self.print_banner()
-
         try:
+            self.print_banner()
             self.target_dir = self.get_target_directory()
             self.create_hook_directory()
             self.copy_hook_files()
             self.generate_settings_json()
             self.show_env_instructions()
             self.run_verification()
+
+            # Output JSON result in non-interactive mode
+            if self.is_non_interactive():
+                result = {
+                    "status": "success",
+                    "hook_path": str(self.hook_dir),
+                    "version": self.version
+                }
+                print(json.dumps(result))
+
         except KeyboardInterrupt:
-            print("\n\n[INFO] Installation cancelled by user.")
+            if self.is_non_interactive():
+                print(json.dumps({"status": "cancelled", "message": "Installation cancelled"}))
+            else:
+                print("\n\n[INFO] Installation cancelled by user.")
             sys.exit(0)
         except Exception as e:
-            print(f"\n[ERROR] Installation failed: {e}")
-            import traceback
-            traceback.print_exc()
+            if self.is_non_interactive():
+                print(json.dumps({
+                    "status": "error",
+                    "message": str(e)
+                }))
+            else:
+                print(f"\n[ERROR] Installation failed: {e}")
+                import traceback
+                traceback.print_exc()
             sys.exit(1)
 
 
 def main() -> None:
     """Main entry point."""
-    installer = Installer()
+    installer = Installer(sys.argv[1:])
     installer.run()
 
 
