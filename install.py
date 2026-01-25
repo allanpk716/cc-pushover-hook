@@ -351,6 +351,43 @@ class Installer:
         elif copied > 0:
             self.print_info("\n[INFO] No old files found (fresh install or already cleaned)")
 
+    def create_version_file(self) -> None:
+        """Create VERSION file with version, install time, and git commit."""
+        try:
+            from datetime import datetime
+
+            # Get git commit hash
+            git_commit = "unknown"
+            try:
+                result = subprocess.run(
+                    ['git', 'rev-parse', 'HEAD'],
+                    cwd=self.script_dir,
+                    capture_output=True,
+                    text=True,
+                    timeout=5
+                )
+                if result.returncode == 0 and result.stdout.strip():
+                    git_commit = result.stdout.strip()
+            except (subprocess.TimeoutExpired, FileNotFoundError, Exception):
+                pass
+
+            # Create VERSION file content
+            installed_at = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+            version_content = f"version={self.version}\ninstalled_at={installed_at}\ngit_commit={git_commit}\n"
+
+            # Write VERSION file
+            version_file = self.hook_dir / "VERSION"
+            with open(version_file, 'w', encoding='utf-8') as f:
+                f.write(version_content)
+
+            self.print_info(f"[OK] Created VERSION file")
+            self.print_info(f"[INFO] Version: {self.version}")
+            self.print_info(f"[INFO] Installed at: {installed_at}")
+            self.print_info(f"[INFO] Git commit: {git_commit}")
+
+        except Exception as e:
+            self.print_info(f"[WARN] Failed to create VERSION file: {e}")
+
     def backup_settings(self, settings_path: Path) -> None:
         """Create a backup of existing settings.json."""
         try:
@@ -607,6 +644,7 @@ class Installer:
             self.target_dir = self.get_target_directory()
             self.create_hook_directory()
             self.copy_hook_files()
+            self.create_version_file()
             self.generate_settings_json()
             self.show_env_instructions()
             self.run_verification()
