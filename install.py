@@ -480,8 +480,16 @@ class Installer:
         except Exception as e:
             self.print_info(f"[WARN] Failed to create VERSION file: {e}")
 
-    def backup_settings(self, settings_path: Path) -> None:
-        """Create a backup of existing settings.json."""
+    def backup_settings(self, settings_path: Path) -> Path:
+        """
+        Create a backup of existing settings.json.
+
+        Args:
+            settings_path: settings.json 文件路径
+
+        Returns:
+            备份文件路径，如果备份失败则返回 None
+        """
         try:
             from datetime import datetime
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -489,8 +497,66 @@ class Installer:
             shutil.copy2(settings_path, backup_path)
             self.print_info(f"[OK] Backed up existing settings.json to:")
             self.print_info(f"     {backup_path.name}")
+            return backup_path
         except Exception as e:
             self.print_info(f"[WARN] Failed to backup settings.json: {e}")
+            return None
+
+    def cleanup_old_files(self) -> None:
+        """
+        清理旧版本的文件。
+        包括：
+        - 旧的扁平结构 hook 文件（在 .claude/hooks/ 目录）
+        - 旧的 __pycache__ 目录
+        - 旧的禁用标志文件（.no-pushover, .no-windows）
+        """
+        old_hooks_dir = self.target_dir / ".claude" / "hooks"
+        old_claude_dir = self.target_dir / ".claude"
+
+        # 需要清理的旧文件
+        old_files_to_cleanup = [
+            "pushover-notify.py",
+            "test-pushover.py",
+            "diagnose.py",
+            "README.md",
+            "debug.log",
+        ]
+
+        existing_old_files = []
+        for filename in old_files_to_cleanup:
+            old_file = old_hooks_dir / filename
+            if old_file.exists():
+                existing_old_files.append(old_file)
+
+        # 检查 __pycache__ 目录
+        old_pycache = old_hooks_dir / "__pycache__"
+        if old_pycache.exists() and old_pycache.is_dir():
+            existing_old_files.append(old_pycache)
+
+        # 检查旧的禁用标志文件
+        old_disable_files = [
+            old_claude_dir / ".no-pushover",
+            old_claude_dir / ".no-windows",
+        ]
+        for disable_file in old_disable_files:
+            if disable_file.exists():
+                existing_old_files.append(disable_file)
+
+        # 执行清理
+        if existing_old_files:
+            self.print_info(f"\n[INFO] Cleaning up {len(existing_old_files)} old file(s)...")
+            for old_file in existing_old_files:
+                try:
+                    if old_file.is_dir():
+                        shutil.rmtree(old_file)
+                    else:
+                        old_file.unlink()
+                    self.print_info(f"[OK] Removed: {old_file.name}")
+                except Exception as e:
+                    self.print_info(f"[WARN] Failed to remove {old_file.name}: {e}")
+                    self.print_info(f"[INFO] Please manually remove: {old_file}")
+        else:
+            self.print_info("\n[INFO] No old files found (fresh install or already cleaned)")
 
     def merge_hook_configs(self, existing_hooks: dict, new_hooks: dict) -> dict:
         """
