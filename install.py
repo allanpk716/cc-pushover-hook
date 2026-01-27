@@ -128,6 +128,12 @@ class Installer:
             help="Quiet mode, reduce output"
         )
         parser.add_argument(
+            "--timeout",
+            type=int,
+            default=5,
+            help="Hook execution timeout in seconds (default: 5)"
+        )
+        parser.add_argument(
             "--version",
             action="version",
             version=f"%(prog)s {self.VERSION}"
@@ -469,7 +475,8 @@ class Installer:
                     "hooks": [
                         {
                             "type": "command",
-                            "command": command
+                            "command": command,
+                            "timeout": self.parsed_args.timeout
                         }
                     ]
                 }
@@ -479,7 +486,8 @@ class Installer:
                     "hooks": [
                         {
                             "type": "command",
-                            "command": command
+                            "command": command,
+                            "timeout": self.parsed_args.timeout
                         }
                     ]
                 }
@@ -490,7 +498,8 @@ class Installer:
                     "hooks": [
                         {
                             "type": "command",
-                            "command": command
+                            "command": command,
+                            "timeout": self.parsed_args.timeout
                         }
                     ]
                 }
