@@ -137,6 +137,51 @@ class Installer:
                 pass
         return None
 
+    def determine_install_action(self, detection: dict) -> str:
+        """
+        根据检测结果确定安装策略。
+
+        Args:
+            detection: detect_existing_installation() 的返回值
+
+        Returns:
+            安装策略字符串:
+            - 'fresh_install': 全新安装，没有现有配置
+            - 'migrate_from_old': 从旧版本迁移（扁平结构 -> 子目录结构）
+            - 'backup_and_upgrade': 备份并升级（已有新版本结构）
+            - 'merge_to_existing': 合并到现有 settings.json
+            - 'merge_settings_only': 仅合并配置（文件已存在）
+        """
+        has_settings = detection["has_settings"]
+        has_old_hook = detection["has_old_hook"]
+        has_new_hook = detection["has_new_hook"]
+        old_version = detection["old_version"]
+
+        # 强制重新安装
+        if self.parsed_args.force:
+            if has_new_hook:
+                return 'backup_and_upgrade'
+            return 'fresh_install'
+
+        # 已有新版本结构
+        if has_new_hook:
+            if has_settings:
+                return 'merge_to_existing'
+            return 'merge_settings_only'
+
+        # 有旧版本结构
+        if has_old_hook:
+            if has_settings:
+                return 'migrate_from_old'
+            return 'fresh_install'
+
+        # 只有 settings.json，没有 hook 文件
+        if has_settings:
+            return 'merge_to_existing'
+
+        # 完全全新安装
+        return 'fresh_install'
+
     def _create_argument_parser(self):
         """Create command line argument parser."""
         parser = argparse.ArgumentParser(
