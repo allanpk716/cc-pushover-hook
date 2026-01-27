@@ -495,13 +495,28 @@ class Installer:
     def merge_hook_configs(self, existing_hooks: dict, new_hooks: dict) -> dict:
         """
         Merge new hook configurations into existing ones.
+
+        Args:
+            existing_hooks: 现有的 hooks 配置
+            new_hooks: 要合并的新 hooks 配置
+
+        Returns:
+            合并后的 hooks 配置字典
+
+        Logic:
+            1. 如果事件名不存在，直接添加
+            2. 如果新配置包含 pushover hook，先移除旧的 pushover hook，再添加新的
+            3. 如果新配置不包含 pushover hook，检查是否已存在，避免重复
         """
         merged = existing_hooks.copy()
 
         for event_name, event_configs in new_hooks.items():
             if event_name not in merged:
+                # 事件不存在，直接添加
                 merged[event_name] = event_configs
+                self.print_info(f"[INFO] Added new event hooks: {event_name}")
             else:
+                # 事件已存在，需要合并
                 for new_event_config in event_configs:
                     new_hooks_list = new_event_config.get("hooks", [])
                     new_has_pushover = any(
@@ -510,6 +525,7 @@ class Installer:
                     )
 
                     if new_has_pushover:
+                        # 移除旧的 pushover hook
                         filtered_configs = []
                         removed_count = 0
                         for existing_event_config in merged[event_name]:
@@ -528,8 +544,10 @@ class Installer:
                         if removed_count > 0:
                             self.print_info(f"[INFO] Replaced {removed_count} old pushover hook(s) for {event_name}")
 
+                        # 添加新的 pushover hook
                         merged[event_name].append(new_event_config)
                     else:
+                        # 非_pushover hook，检查重复
                         found = False
                         for existing_event_config in merged[event_name]:
                             if existing_event_config.get("hooks") == new_event_config.get("hooks"):
@@ -538,6 +556,7 @@ class Installer:
 
                         if not found:
                             merged[event_name].append(new_event_config)
+                            self.print_info(f"[INFO] Added new hook for {event_name}")
                         else:
                             self.print_info(f"[INFO] Hook already exists for {event_name}, skipping")
 
