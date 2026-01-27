@@ -590,6 +590,212 @@ class Installer:
 
         return merged
 
+    def get_pushover_hooks_config(self) -> dict:
+        """
+        获取 Pushover hooks 配置。
+
+        Returns:
+            Pushover hooks 配置字典
+        """
+        hook_script_path = self.hook_dir / "pushover-notify.py"
+
+        if self.platform == "Windows":
+            command = f"set PYTHONIOENCODING=utf-8&& python \"{hook_script_path}\""
+        else:
+            command = f"PYTHONIOENCODING=utf-8 \"{hook_script_path}\""
+
+        return {
+            "UserPromptSubmit": [
+                {
+                    "hooks": [
+                        {
+                            "type": "command",
+                            "command": command,
+                            "timeout": self.parsed_args.timeout
+                        }
+                    ]
+                }
+            ],
+            "Stop": [
+                {
+                    "hooks": [
+                        {
+                            "type": "command",
+                            "command": command,
+                            "timeout": self.parsed_args.timeout
+                        }
+                    ]
+                }
+            ],
+            "Notification": [
+                {
+                    "matcher": "permission_prompt|idle_prompt",
+                    "hooks": [
+                        {
+                            "type": "command",
+                            "command": command,
+                            "timeout": self.parsed_args.timeout
+                        }
+                    ]
+                }
+            ]
+        }
+
+    def fresh_install(self) -> None:
+        """
+        全新安装模式。
+        创建全新的 settings.json 文件。
+        """
+        self.print_info("[INFO] Installation mode: Fresh install")
+        settings = {"hooks": self.get_pushover_hooks_config()}
+        settings_path = self.target_dir / ".claude" / "settings.json"
+
+        try:
+            with open(settings_path, 'w', encoding='utf-8') as f:
+                json.dump(settings, f, indent=2, ensure_ascii=False)
+            self.print_info(f"[OK] Created: {settings_path}")
+            self.print_info(f"[INFO] Platform: {self.platform}")
+        except Exception as e:
+            print(json.dumps({
+                "status": "error",
+                "message": f"Failed to create settings.json: {e}"
+            }))
+            sys.exit(1)
+
+    def migrate_from_old_version(self) -> None:
+        """
+        从旧版本迁移模式。
+        备份现有配置，从扁平结构迁移到子目录结构。
+        """
+        self.print_info("[INFO] Installation mode: Migrate from old version")
+        settings_path = self.target_dir / ".claude" / "settings.json"
+
+        try:
+            with open(settings_path, 'r', encoding='utf-8') as f:
+                existing_settings = json.load(f)
+
+            self.backup_settings(settings_path)
+
+            existing_hooks = existing_settings.get("hooks", {})
+            new_hooks = self.get_pushover_hooks_config()
+            merged_hooks = self.merge_hook_configs(existing_hooks, new_hooks)
+
+            existing_settings["hooks"] = merged_hooks
+
+            with open(settings_path, 'w', encoding='utf-8') as f:
+                json.dump(existing_settings, f, indent=2, ensure_ascii=False)
+
+            self.print_info(f"[OK] Migrated and merged hooks into settings.json")
+            self.print_info(f"[INFO] Platform: {self.platform}")
+
+        except json.JSONDecodeError as e:
+            print(json.dumps({
+                "status": "error",
+                "message": f"Existing settings.json is invalid: {e}"
+            }))
+            sys.exit(1)
+        except Exception as e:
+            print(json.dumps({
+                "status": "error",
+                "message": f"Failed to migrate settings.json: {e}"
+            }))
+            sys.exit(1)
+
+    def backup_and_upgrade(self) -> None:
+        """
+        备份并升级模式。
+        已有新版本结构，需要升级配置。
+        """
+        self.print_info("[INFO] Installation mode: Backup and upgrade")
+        settings_path = self.target_dir / ".claude" / "settings.json"
+
+        if settings_path.exists():
+            try:
+                with open(settings_path, 'r', encoding='utf-8') as f:
+                    existing_settings = json.load(f)
+
+                self.backup_settings(settings_path)
+
+                existing_hooks = existing_settings.get("hooks", {})
+                new_hooks = self.get_pushover_hooks_config()
+                merged_hooks = self.merge_hook_configs(existing_hooks, new_hooks)
+
+                existing_settings["hooks"] = merged_hooks
+
+                with open(settings_path, 'w', encoding='utf-8') as f:
+                    json.dump(existing_settings, f, indent=2, ensure_ascii=False)
+
+                self.print_info(f"[OK] Upgraded hooks in settings.json")
+                self.print_info(f"[INFO] Platform: {self.platform}")
+
+            except json.JSONDecodeError as e:
+                print(json.dumps({
+                    "status": "error",
+                    "message": f"Existing settings.json is invalid: {e}"
+                }))
+                sys.exit(1)
+            except Exception as e:
+                print(json.dumps({
+                    "status": "error",
+                    "message": f"Failed to upgrade settings.json: {e}"
+                }))
+                sys.exit(1)
+        else:
+            # 没有 settings.json，创建新的
+            self.fresh_install()
+
+    def merge_to_existing_settings(self) -> None:
+        """
+        合并到现有配置模式。
+        仅有 settings.json，需要添加 Pushover hooks。
+        """
+        self.print_info("[INFO] Installation mode: Merge to existing settings")
+        settings_path = self.target_dir / ".claude" / "settings.json"
+
+        try:
+            with open(settings_path, 'r', encoding='utf-8') as f:
+                existing_settings = json.load(f)
+
+            self.backup_settings(settings_path)
+
+            existing_hooks = existing_settings.get("hooks", {})
+            new_hooks = self.get_pushover_hooks_config()
+            merged_hooks = self.merge_hook_configs(existing_hooks, new_hooks)
+
+            existing_settings["hooks"] = merged_hooks
+
+            with open(settings_path, 'w', encoding='utf-8') as f:
+                json.dump(existing_settings, f, indent=2, ensure_ascii=False)
+
+            self.print_info(f"[OK] Merged Pushover hooks into existing settings.json")
+            self.print_info(f"[INFO] Platform: {self.platform}")
+
+        except json.JSONDecodeError as e:
+            print(json.dumps({
+                "status": "error",
+                "message": f"Existing settings.json is invalid: {e}"
+            }))
+            sys.exit(1)
+        except Exception as e:
+            print(json.dumps({
+                "status": "error",
+                "message": f"Failed to merge settings.json: {e}"
+            }))
+            sys.exit(1)
+
+    def merge_settings_and_generate(self) -> None:
+        """
+        仅合并配置模式。
+        Hook 文件已存在，只需更新配置。
+        """
+        self.print_info("[INFO] Installation mode: Merge settings only")
+        settings_path = self.target_dir / ".claude" / "settings.json"
+
+        if settings_path.exists():
+            self.merge_to_existing_settings()
+        else:
+            self.fresh_install()
+
     def generate_settings_json(self) -> None:
         """Generate or merge platform-specific settings.json."""
         self.print_info("\n[Step 4/5] Generating Configuration")
