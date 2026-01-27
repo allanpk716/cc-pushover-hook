@@ -226,8 +226,8 @@ class Installer:
         parser.add_argument(
             "--timeout",
             type=int,
-            default=5,
-            help="Hook execution timeout in seconds (default: 5)"
+            default=15,
+            help="Hook execution timeout in seconds (default: 15)"
         )
         parser.add_argument(
             "--version",
@@ -1090,22 +1090,22 @@ class Installer:
         self.print_info("\n[Step 5/5] Environment Variables")
         self.print_info("-" * 60)
         self.print_info("You need to set the following environment variables:")
-        self.print_info()
+        print()
         self.print_info("  PUSHOVER_TOKEN  - Your Pushover application token")
         self.print_info("  PUSHOVER_USER   - Your Pushover user key")
-        self.print_info()
+        print()
         self.print_info("Get them from:")
         self.print_info("  - Token: https://pushover.net/apps")
         self.print_info("  - User:  https://pushover.net/")
-        self.print_info()
+        print()
         self.print_info("Set them using:")
-        self.print_info()
+        print()
 
         if self.platform == "Windows":
             self.print_info("  # Command Prompt (temporary)")
             self.print_info("  set PUSHOVER_TOKEN=your_token_here")
             self.print_info("  set PUSHOVER_USER=your_user_key_here")
-            self.print_info()
+            print()
             self.print_info("  # PowerShell (temporary)")
             self.print_info("  $env:PUSHOVER_TOKEN=\"your_token_here\"")
             self.print_info("  $env:PUSHOVER_USER=\"your_user_key_here\"")
@@ -1115,7 +1115,7 @@ class Installer:
             self.print_info(f"  # Temporary (current session only)")
             self.print_info("  export PUSHOVER_TOKEN=your_token_here")
             self.print_info("  export PUSHOVER_USER=your_user_key_here")
-            self.print_info()
+            print()
             self.print_info(f"  # Permanent (add to {rc_file})")
 
     def print_completion_message(self, action: str) -> None:

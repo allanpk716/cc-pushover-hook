@@ -11,6 +11,8 @@ import json
 import os
 import subprocess
 import sys
+import urllib.request
+import urllib.parse
 from datetime import datetime, timedelta
 import re
 from pathlib import Path
@@ -224,7 +226,7 @@ def send_windows_notification(title: str, message: str) -> bool:
 
 def _send_pushover_internal(title: str, message: str, priority: int = 0, cwd: str = "") -> bool:
     """
-    Internal: Send a notification via Pushover API using curl.
+    Internal: Send a notification via Pushover API using urllib.
 
     Args:
         title: Notification title
@@ -251,92 +253,73 @@ def _send_pushover_internal(title: str, message: str, priority: int = 0, cwd: st
 
     log(f"Environment variables found - TOKEN: {token[:10]}..., USER: {user[:10]}...")
 
-    # Create a temp file to capture response body for debugging
-    import tempfile
-    with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.txt') as f:
-        response_file = f.name
-
     try:
         # Convert literal \n to actual newlines for the message
-        message = message.replace("\\n", "\n")
+        message = message.replace("\\\\n", "\\n")
 
-        # Build curl command with URL encoding
-        # Use TLS 1.2+ for Windows schannel compatibility
-        cmd = [
-            "curl",
-            "-s",
-            "-o", response_file,
-            "-w", "%{http_code}",
-            "--tlsv1.2",
-            "--ssl-reqd",
+        # Build form data
+        data = urllib.parse.urlencode({
+            "token": token,
+            "user": user,
+            "title": title,
+            "message": message,
+            "priority": priority
+        }).encode("utf-8")
+
+        log(f"Sending POST request to Pushover API...")
+
+        # Create request with proper headers
+        request = urllib.request.Request(
             "https://api.pushover.net/1/messages.json",
-            "--data-urlencode", f"token={token}",
-            "--data-urlencode", f"user={user}",
-            "--data-urlencode", f"title={title}",
-            "--data-urlencode", f"message={message}",
-            "-d", f"priority={priority}",
-        ]
+            data=data,
+            method="POST"
+        )
+        request.add_header("Content-Type", "application/x-www-form-urlencoded")
+        request.add_header("User-Agent", "ClaudeCode-PushoverHook/1.0")
 
-        log(f"Executing curl command...")
-        log(f"Command: {' '.join(cmd[:4])} ...")  # Log first part of command
+        # Send request with timeout
+        with urllib.request.urlopen(request, timeout=10) as response:
+            http_code = response.status
+            response_body = response.read().decode("utf-8")
 
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
-
-        log(f"Curl return code: {result.returncode}")
-        http_code = result.stdout.strip()
         log(f"HTTP Status Code: {http_code}")
+        log(f"API Response: {response_body}")
 
-        # Read and log response body
+        # Parse JSON response
+        response_json = json.loads(response_body)
+
+        if response_json.get("status") == 1:
+            log(f"Request successful - ID: {response_json.get('request', 'N/A')}")
+            return True
+        else:
+            log("ERROR: API returned status != 1", level="error")
+            if "errors" in response_json:
+                for error in response_json["errors"]:
+                    log(f"API Error: {error}", level="error")
+            return False
+
+    except urllib.error.HTTPError as e:
+        log(f"ERROR: HTTP {e.code} - {e.reason}", level="error")
         try:
-            with open(response_file, 'r', encoding='utf-8') as f:
-                response_body = f.read()
-            log(f"API Response: {response_body}")
-
-            # Parse JSON for detailed error info
-            try:
-                response_json = json.loads(response_body)
-                if response_json.get("status") == 1:
-                    log(f"Request successful - ID: {response_json.get('request', 'N/A')}")
-                    return True
-                else:
-                    log("ERROR: API returned status != 1", level="error")
-                    if "errors" in response_json:
-                        for error in response_json["errors"]:
-                            log(f"API Error: {error}")
-                    return False
-            except json.JSONDecodeError:
-                log("WARNING: Could not parse response as JSON", level="warn")
-
-        except Exception as e:
-            log(f"WARNING: Could not read response file: {e}", level="warn")
-
-        # Fallback: check HTTP code
-        success = result.returncode == 0 and http_code == "200"
-        if not success:
-            if http_code == "400":
-                log("ERROR: HTTP 400 - Bad Request (check token/user key)", level="error")
-            elif http_code == "401":
-                log("ERROR: HTTP 401 - Unauthorized (invalid token)", level="error")
-            elif http_code == "404":
-                log("ERROR: HTTP 404 - User not found", level="error")
-        log(f"Request successful: {success}")
-        return success
-
-    except subprocess.TimeoutExpired:
-        log("ERROR: Curl request timed out", level="error")
+            error_body = e.read().decode("utf-8")
+            log(f"Error response: {error_body}")
+        except Exception:
+            pass
         return False
-    except FileNotFoundError:
-        log("ERROR: Curl not found", level="error")
+    except urllib.error.URLError as e:
+        log(f"ERROR: URL error - {e.reason}", level="error")
+        if isinstance(e.reason, Exception):
+            log(f"Reason details: {e.reason}", level="error")
+        return False
+    except TimeoutError:
+        log("ERROR: Request timed out", level="error")
+        return False
+    except json.JSONDecodeError as e:
+        log(f"ERROR: Could not parse response as JSON: {e}", level="error")
         return False
     except Exception as e:
         log(f"ERROR: Exception in send_pushover: {e}", level="error")
         return False
-    finally:
-        # Clean up temp file
-        try:
-            Path(response_file).unlink(missing_ok=True)
-        except Exception:
-            pass
 
 
 def send_notifications(title: str, message: str, priority: int = 0, cwd: str = "") -> dict:
