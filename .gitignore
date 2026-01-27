@@ -1,6 +1,4 @@
 # Claude Code cache
-.claude/cache/
-.claude/hooks/debug.log
 **/__pycache__
 nul
 *.log
