@@ -87,15 +87,6 @@ class Installer:
         # Set version after script_dir is initialized
         self.version = self.get_version_from_git()
 
-        # Debug: print received args
-        import sys
-        print(f"[DEBUG] sys.argv: {sys.argv}", file=sys.stderr)
-        print(f"[DEBUG] args parameter: {args}", file=sys.stderr)
-
-        # Debug: print parsed args
-        print(f"[DEBUG] parsed_args.target_dir: {self.parsed_args.target_dir}", file=sys.stderr)
-        print(f"[DEBUG] parsed_args.non_interactive: {self.parsed_args.non_interactive}", file=sys.stderr)
-
     def detect_existing_installation(self) -> dict:
         """
         检测目标项目的现有安装状态。
@@ -594,15 +585,19 @@ class Installer:
         """
         获取 Pushover hooks 配置。
 
+        使用 CLAUDE_PROJECT_DIR 环境变量实现可移植的路径配置。
+
         Returns:
             Pushover hooks 配置字典
         """
-        hook_script_path = self.hook_dir / "pushover-notify.py"
-
+        # 使用环境变量 CLAUDE_PROJECT_DIR 来实现可移植的路径配置
         if self.platform == "Windows":
-            command = f"set PYTHONIOENCODING=utf-8&& python \"{hook_script_path}\""
+            # Windows 上优先使用 py 命令，更可靠
+            env_check = self.check_environment()
+            python_cmd = env_check.get("python_command", "py")
+            command = f'set PYTHONIOENCODING=utf-8&& {python_cmd} "%CLAUDE_PROJECT_DIR%\\.claude\\hooks\\pushover-hook\\pushover-notify.py"'
         else:
-            command = f"PYTHONIOENCODING=utf-8 \"{hook_script_path}\""
+            command = 'PYTHONIOENCODING=utf-8 python3 "$CLAUDE_PROJECT_DIR/.claude/hooks/pushover-hook/pushover-notify.py"'
 
         return {
             "UserPromptSubmit": [
@@ -796,17 +791,191 @@ class Installer:
         else:
             self.fresh_install()
 
+    def check_environment(self) -> dict:
+        """
+        检查系统环境依赖项。
+
+        Returns:
+            包含环境检查结果的字典:
+            - python_available: bool - Python 是否可用
+            - python_command: str - 可用的 Python 命令 (python/python3/py)
+            - burnttoast_available: bool - Windows 上 BurntToast 模块是否可用
+            - pushover_configured: bool - Pushover 环境变量是否已配置
+            - has_token: bool - PUSHOVER_TOKEN 是否设置
+            - has_user: bool - PUSHOVER_USER 是否设置
+        """
+        env_status = {
+            "python_available": False,
+            "python_command": None,
+            "burnttoast_available": False,
+            "pushover_configured": False,
+            "has_token": False,
+            "has_user": False
+        }
+
+        # 检查 Python
+        if self.platform == "Windows":
+            # Windows: 优先尝试 py launcher
+            for cmd in ["py", "python"]:
+                try:
+                    result = subprocess.run(
+                        [cmd, "--version"],
+                        capture_output=True,
+                        timeout=5
+                    )
+                    if result.returncode == 0:
+                        env_status["python_available"] = True
+                        env_status["python_command"] = cmd
+                        break
+                except (subprocess.TimeoutExpired, FileNotFoundError, Exception):
+                    continue
+        else:
+            # Linux/Mac: 尝试 python3 或 python
+            for cmd in ["python3", "python"]:
+                try:
+                    result = subprocess.run(
+                        [cmd, "--version"],
+                        capture_output=True,
+                        timeout=5
+                    )
+                    if result.returncode == 0:
+                        env_status["python_available"] = True
+                        env_status["python_command"] = cmd
+                        break
+                except (subprocess.TimeoutExpired, FileNotFoundError, Exception):
+                    continue
+
+        # 检查 BurntToast (仅 Windows)
+        if self.platform == "Windows" and env_status["python_available"]:
+            env_status["burnttoast_available"] = self._check_burnttoast(env_status["python_command"])
+
+        # 检查 Pushover 环境变量
+        env_status["has_token"] = bool(os.environ.get("PUSHOVER_TOKEN"))
+        env_status["has_user"] = bool(os.environ.get("PUSHOVER_USER"))
+        env_status["pushover_configured"] = env_status["has_token"] and env_status["has_user"]
+
+        return env_status
+
+    def _check_burnttoast(self, python_cmd: str) -> bool:
+        """
+        检查 BurntToast PowerShell 模块是否可用。
+
+        Args:
+            python_cmd: 可用的 Python 命令
+
+        Returns:
+            bool - BurntToast 是否可用
+        """
+        try:
+            # 使用 PowerShell 检查模块
+            result = subprocess.run(
+                ["powershell", "-Command", "Get-Module -ListAvailable -Name BurntToast"],
+                capture_output=True,
+                timeout=5
+            )
+            return result.returncode == 0
+        except (subprocess.TimeoutExpired, FileNotFoundError, Exception):
+            return False
+
+    def show_environment_status(self, env_status: dict) -> None:
+        """
+        显示环境状态信息。
+
+        Args:
+            env_status: check_environment() 返回的状态字典
+        """
+        if self.is_non_interactive():
+            self._show_environment_json(env_status)
+        else:
+            self._show_environment_interactive(env_status)
+
+    def _show_environment_interactive(self, env_status: dict) -> None:
+        """在交互模式下显示环境状态。"""
+        print("\n" + "=" * 60)
+        print("Environment Status")
+        print("=" * 60)
+        print()
+
+        # Python 状态
+        python_status = "[OK]" if env_status["python_available"] else "[FAIL]"
+        python_cmd = env_status.get("python_command", "Not found")
+        print(f"Python:     {python_status}  ({python_cmd})")
+
+        # Pushover 状态
+        token_status = "[OK]" if env_status["has_token"] else "[MISSING]"
+        user_status = "[OK]" if env_status["has_user"] else "[MISSING]"
+        print(f"PUSHOVER_TOKEN:  {token_status}")
+        print(f"PUSHOVER_USER:   {user_status}")
+
+        # Windows 特定状态
+        if self.platform == "Windows":
+            bt_status = "[OK]" if env_status["burnttoast_available"] else "[NOT INSTALLED]"
+            print(f"BurntToast:  {bt_status}  (Windows notifications)")
+
+        print()
+        print("=" * 60)
+
+        # 显示指南
+        if not env_status["pushover_configured"]:
+            print("\n[INFO] Pushover environment variables not configured")
+            print("Please set the following environment variables:")
+            print("  - PUSHOVER_TOKEN (get from https://pushover.net/apps)")
+            print("  - PUSHOVER_USER  (get from https://pushover.net/)")
+            print()
+
+        if self.platform == "Windows" and not env_status["burnttoast_available"]:
+            print("[INFO] BurntToast module not installed")
+            print("Windows desktop notifications will not be available")
+            print("To install, run (as Administrator):")
+            print("  Install-Module -Name BurntToast -Force")
+            print()
+
+        if self.platform == "Windows" and not env_status["python_available"]:
+            self._show_windows_dependency_guide()
+
+    def _show_environment_json(self, env_status: dict) -> None:
+        """在非交互模式下以 JSON 格式显示环境状态。"""
+        output = {
+            "status": "success",
+            "environment": env_status
+        }
+        print(json.dumps(output, indent=2))
+
+    def _show_windows_dependency_guide(self) -> None:
+        """显示 Windows 依赖项安装指南。"""
+        print()
+        print("=" * 60)
+        print("Windows Dependencies Installation Guide")
+        print("=" * 60)
+        print()
+        print("Python is not installed or not found on your system.")
+        print()
+        print("To install Python:")
+        print("  1. Visit: https://www.python.org/downloads/")
+        print("  2. Download and run the installer")
+        print("  3. IMPORTANT: Check 'Add Python to PATH' during installation")
+        print()
+        print("After installation, restart your terminal and run this script again.")
+        print()
+        print("Alternatively, install Python using the Microsoft Store:")
+        print("  - Search 'Python' in Microsoft Store")
+        print("  - Install the latest version (3.10 or later recommended)")
+        print()
+        print("=" * 60)
+
     def generate_settings_json(self) -> None:
         """Generate or merge platform-specific settings.json."""
         self.print_info("\n[Step 4/5] Generating Configuration")
         self.print_info("-" * 60)
 
-        hook_script_path = self.hook_dir / "pushover-notify.py"
-
+        # 使用环境变量 CLAUDE_PROJECT_DIR 来实现可移植的路径配置
         if self.platform == "Windows":
-            command = f"set PYTHONIOENCODING=utf-8&& python \"{hook_script_path}\""
+            # Windows 上优先使用 py 命令，更可靠
+            env_check = self.check_environment()
+            python_cmd = env_check.get("python_command", "py")
+            command = f'set PYTHONIOENCODING=utf-8&& {python_cmd} "%CLAUDE_PROJECT_DIR%\\.claude\\hooks\\pushover-hook\\pushover-notify.py"'
         else:
-            command = f"PYTHONIOENCODING=utf-8 \"{hook_script_path}\""
+            command = 'PYTHONIOENCODING=utf-8 python3 "$CLAUDE_PROJECT_DIR/.claude/hooks/pushover-hook/pushover-notify.py"'
 
         pushover_hooks = {
             "UserPromptSubmit": [
@@ -865,7 +1034,7 @@ class Installer:
 
                 self.print_info(f"[OK] Merged Pushover hooks into existing settings.json")
                 self.print_info(f"[INFO] Platform: {self.platform}")
-                self.print_info(f"[INFO] Command: {command}")
+                self.print_info(f"[INFO] Command uses CLAUDE_PROJECT_DIR for portability")
 
             except json.JSONDecodeError as e:
                 print(json.dumps({
@@ -886,7 +1055,7 @@ class Installer:
                     json.dump(settings, f, indent=2, ensure_ascii=False)
                 self.print_info(f"[OK] Created: {settings_path}")
                 self.print_info(f"[INFO] Platform: {self.platform}")
-                self.print_info(f"[INFO] Command: {command}")
+                self.print_info(f"[INFO] Command uses CLAUDE_PROJECT_DIR for portability")
             except Exception as e:
                 print(json.dumps({
                     "status": "error",
@@ -930,11 +1099,13 @@ class Installer:
             self.print_info()
             self.print_info(f"  # Permanent (add to {rc_file})")
 
-    def run_verification(self) -> None:
-        """Run diagnostic script to verify installation."""
-        if self.parsed_args.skip_diagnostics:
-            return
+    def print_completion_message(self, action: str) -> None:
+        """
+        打印安装完成消息。
 
+        Args:
+            action: 执行的安装动作类型
+        """
         if self.is_non_interactive():
             return
 
@@ -942,31 +1113,109 @@ class Installer:
         print("Installation Complete!")
         print("=" * 60)
         print()
+        print(f"Action performed: {action}")
+        print(f"Version: {self.version}")
+        print()
+
         print("Next steps:")
         print()
-        print("1. Set the environment variables (shown above)")
-        print("2. Run the diagnostic script:")
+        print("1. Check environment status")
+        print("2. Set environment variables if needed (shown above)")
+        print("3. Run the diagnostic script:")
         print()
 
         if self.platform == "Windows":
-            print(f"   python {self.hook_dir}\\diagnose.py")
+            print(f"   py {self.hook_dir}\\diagnose.py")
         else:
-            print(f"   python {self.hook_dir}/diagnose.py")
+            print(f"   python3 {self.hook_dir}/diagnose.py")
 
         print()
-        print("3. Send a test notification:")
+        print("4. Send a test notification:")
         print()
 
         if self.platform == "Windows":
-            print(f"   python {self.hook_dir}\\test-pushover.py")
+            print(f"   py {self.hook_dir}\\test-pushover.py")
         else:
-            print(f"   python {self.hook_dir}/test-pushover.py")
+            print(f"   python3 {self.hook_dir}/test-pushover.py")
 
         print()
-        print("4. Trigger a Claude Code task and check for notifications!")
+        print("5. Trigger a Claude Code task and check for notifications!")
         print()
 
-        response = input("Run diagnostics now? (y/n): ").lower()
+    def handle_error(self, error: Exception) -> None:
+        """
+        统一错误处理。
+
+        Args:
+            error: 捕获的异常对象
+        """
+        if self.is_non_interactive():
+            print(json.dumps({
+                "status": "error",
+                "message": str(error)
+            }))
+        else:
+            print(f"\n[ERROR] Installation failed: {error}")
+            import traceback
+            traceback.print_exc()
+        sys.exit(1)
+
+    def run_installation_action(self, action: str) -> None:
+        """
+        根据安装动作类型执行相应的安装流程。
+
+        Args:
+            action: 安装动作类型
+        """
+        # 步骤 1-3: 准备工作（所有动作都需要）
+        self.create_hook_directory()
+        self.copy_hook_files()
+        self.create_version_file()
+
+        # 步骤 4: 配置生成（根据动作类型）
+        self.print_info("\n[Step 4/5] Generating Configuration")
+        self.print_info("-" * 60)
+
+        if action == 'fresh_install':
+            self.fresh_install()
+        elif action == 'migrate_from_old':
+            self.migrate_from_old_version()
+        elif action == 'backup_and_upgrade':
+            self.backup_and_upgrade()
+        elif action == 'merge_to_existing':
+            self.merge_to_existing_settings()
+        elif action == 'merge_settings_only':
+            self.merge_settings_and_generate()
+        else:
+            # 未知动作，回退到默认行为
+            self.print_info(f"[WARN] Unknown action '{action}', using default installation")
+            self.fresh_install()
+
+    def run_verification(self, action: str) -> None:
+        """
+        运行安装后验证和诊断。
+
+        Args:
+            action: 执行的安装动作类型
+        """
+        if self.parsed_args.skip_diagnostics:
+            return
+
+        if self.is_non_interactive():
+            return
+
+        # 显示环境状态
+        env_status = self.check_environment()
+        self.show_environment_status(env_status)
+
+        # 显示环境变量说明
+        self.show_env_instructions()
+
+        # 打印完成消息
+        self.print_completion_message(action)
+
+        # 询问是否运行诊断
+        response = input("\nRun diagnostics now? (y/n): ").lower()
         if response == 'y':
             diagnose_script = self.hook_dir / "diagnose.py"
             if diagnose_script.exists():
@@ -986,21 +1235,44 @@ class Installer:
                     print("[WARN] Diagnostics reported issues. Please fix them above.")
 
     def run(self) -> None:
-        """Run the full installation process."""
-        try:
-            self.print_banner()
-            self.target_dir = self.get_target_directory()
-            self.create_hook_directory()
-            self.copy_hook_files()
-            self.create_version_file()
-            self.generate_settings_json()
-            self.show_env_instructions()
-            self.run_verification()
+        """
+        Run the full installation process.
 
-            # Output JSON result in non-interactive mode
+        重构后的主运行流程:
+        1. 显示横幅
+        2. 获取目标目录
+        3. 检测现有安装
+        4. 确定安装动作
+        5. 执行安装动作
+        6. 运行验证
+        7. 输出结果
+        """
+        try:
+            # 步骤 1: 显示横幅
+            self.print_banner()
+
+            # 步骤 2: 获取目标目录
+            self.target_dir = self.get_target_directory()
+
+            # 步骤 3: 检测现有安装状态
+            self.print_info("[INFO] Detecting existing installation...")
+            detection = self.detect_existing_installation()
+
+            # 步骤 4: 确定安装动作
+            action = self.determine_install_action(detection)
+            self.print_info(f"[INFO] Installation action: {action}")
+
+            # 步骤 5: 执行安装动作
+            self.run_installation_action(action)
+
+            # 步骤 6: 运行验证
+            self.run_verification(action)
+
+            # 步骤 7: 输出 JSON 结果（非交互模式）
             if self.is_non_interactive():
                 result = {
                     "status": "success",
+                    "action": action,
                     "hook_path": str(self.hook_dir),
                     "version": self.version
                 }
@@ -1013,16 +1285,7 @@ class Installer:
                 print("\n\n[INFO] Installation cancelled by user.")
             sys.exit(0)
         except Exception as e:
-            if self.is_non_interactive():
-                print(json.dumps({
-                    "status": "error",
-                    "message": str(e)
-                }))
-            else:
-                print(f"\n[ERROR] Installation failed: {e}")
-                import traceback
-                traceback.print_exc()
-            sys.exit(1)
+            self.handle_error(e)
 
 
 def main() -> None:
