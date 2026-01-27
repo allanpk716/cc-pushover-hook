@@ -379,6 +379,7 @@ class Installer:
             "test-windows-notification.py",
             "diagnose.py",
             "README.md",
+            "install-burnttoast.ps1",  # Windows 用户需要此脚本来安装 BurntToast 模块
         ]
 
         copied = 0
@@ -414,6 +415,8 @@ class Installer:
         # Cleanup old files after successful copy
         if copied > 0:
             self.cleanup_old_files()
+            # 清理子目录中不再使用的文件
+            self._cleanup_obsolete_hook_files(files_to_copy)
 
     def create_version_file(self) -> None:
         """Create VERSION file with version, install time, and git commit."""
@@ -529,6 +532,47 @@ class Installer:
                     self.print_info(f"[INFO] Please manually remove: {old_file}")
         else:
             self.print_info("\n[INFO] No old files found (fresh install or already cleaned)")
+
+    def _cleanup_obsolete_hook_files(self, expected_files: list) -> None:
+        """
+        清理 pushover-hook 子目录中不再使用的文件。
+
+        Args:
+            expected_files: 期望保留的文件名列表
+
+        逻辑：
+        - 列出目标目录中的所有文件
+        - 删除不在 expected_files 列表中的文件（VERSION 文件除外）
+        """
+        if not self.hook_dir or not self.hook_dir.exists():
+            return
+
+        # 构建期望文件集合（包括 VERSION 文件）
+        expected_set = set(expected_files)
+        expected_set.add("VERSION")
+
+        # 获取实际存在的文件列表
+        actual_files = []
+        try:
+            actual_files = [f.name for f in self.hook_dir.iterdir() if f.is_file()]
+        except Exception as e:
+            self.print_info(f"[WARN] Failed to list hook directory: {e}")
+            return
+
+        # 找出需要删除的过时文件
+        obsolete_files = set(actual_files) - expected_set
+
+        if obsolete_files:
+            self.print_info(f"\n[INFO] Cleaning up {len(obsolete_files)} obsolete file(s) in subdirectory...")
+            for filename in obsolete_files:
+                file_path = self.hook_dir / filename
+                try:
+                    file_path.unlink()
+                    self.print_info(f"[OK] Removed obsolete file: {filename}")
+                except Exception as e:
+                    self.print_info(f"[WARN] Failed to remove {filename}: {e}")
+        else:
+            self.print_info("\n[INFO] No obsolete files in subdirectory (all files up to date)")
 
     def merge_hook_configs(self, existing_hooks: dict, new_hooks: dict) -> dict:
         """
