@@ -5,7 +5,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "set PYTHONIOENCODING=utf-8&& python \"C:\\WorkSpace\\agent\\cc-pushover-hook\\.claude\\hooks\\pushover-hook\\pushover-notify.py\""
+            "command": "set PYTHONIOENCODING=utf-8&& python \"C:\\WorkSpace\\agent\\cc-pushover-hook\\.claude\\hooks\\pushover-hook\\pushover-notify.py\"",
+            "timeout": 5
           }
         ]
       }
@@ -15,7 +16,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "set PYTHONIOENCODING=utf-8&& python \"C:\\WorkSpace\\agent\\cc-pushover-hook\\.claude\\hooks\\pushover-hook\\pushover-notify.py\""
+            "command": "set PYTHONIOENCODING=utf-8&& python \"C:\\WorkSpace\\agent\\cc-pushover-hook\\.claude\\hooks\\pushover-hook\\pushover-notify.py\"",
+            "timeout": 5
           }
         ]
       }
@@ -26,7 +28,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "set PYTHONIOENCODING=utf-8&& python \"C:\\WorkSpace\\agent\\cc-pushover-hook\\.claude\\hooks\\pushover-hook\\pushover-notify.py\""
+            "command": "set PYTHONIOENCODING=utf-8&& python \"C:\\WorkSpace\\agent\\cc-pushover-hook\\.claude\\hooks\\pushover-hook\\pushover-notify.py\"",
+            "timeout": 5
           }
         ]
       }

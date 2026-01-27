@@ -18,6 +18,10 @@ from concurrent.futures import ThreadPoolExecutor
 
 
 # Setup logging
+# Control debug logging with PUSHOVER_DEBUG env var (default: errors only)
+DEBUG_MODE = os.environ.get("PUSHOVER_DEBUG", "").lower() in ("1", "true", "yes", "on")
+
+
 def get_log_path() -> Path:
     """Get the debug log file path."""
     # Use the script's directory for logs
@@ -25,13 +29,22 @@ def get_log_path() -> Path:
     return script_dir / "debug.log"
 
 
-def log(message: str) -> None:
-    """Write a message to the debug log with timestamp."""
+def log(message: str, level: str = "info") -> None:
+    """Write a message to the debug log with timestamp.
+
+    Args:
+        message: Message to log
+        level: Log level - 'error', 'warn', or 'info' (default)
+    """
+    # Only log errors and warnings in production, unless DEBUG_MODE is enabled
+    if level == "info" and not DEBUG_MODE:
+        return
+
     try:
         log_path = get_log_path()
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         with open(log_path, "a", encoding="utf-8") as f:
-            f.write(f"[{timestamp}] {message}\n")
+            f.write(f"[{timestamp}] [{level.upper()}] {message}\n")
     except Exception:
         pass
 
@@ -203,13 +216,13 @@ def send_windows_notification(title: str, message: str) -> bool:
                 continue
 
         except subprocess.TimeoutExpired:
-            log(f"WARNING: {method_name} timed out, trying next...")
+            log(f"WARNING: {method_name} timed out, trying next...", level="warn")
             continue
         except Exception as e:
-            log(f"WARNING: {method_name} error: {e}, trying next...")
+            log(f"WARNING: {method_name} error: {e}, trying next...", level="warn")
             continue
 
-    log("WARNING: All Windows notification methods failed")
+    log("WARNING: All Windows notification methods failed", level="warn")
     return False
 
 
@@ -237,7 +250,7 @@ def _send_pushover_internal(title: str, message: str, priority: int = 0, cwd: st
     user = os.environ.get("PUSHOVER_USER")
 
     if not token or not user:
-        log(f"ERROR: Missing env vars - TOKEN={bool(token)}, USER={bool(user)}")
+        log(f"ERROR: Missing env vars - TOKEN={bool(token)}, USER={bool(user)}", level="error")
         return False
 
     log(f"Environment variables found - TOKEN: {token[:10]}..., USER: {user[:10]}...")
@@ -290,37 +303,37 @@ def _send_pushover_internal(title: str, message: str, priority: int = 0, cwd: st
                     log(f"Request successful - ID: {response_json.get('request', 'N/A')}")
                     return True
                 else:
-                    log("ERROR: API returned status != 1")
+                    log("ERROR: API returned status != 1", level="error")
                     if "errors" in response_json:
                         for error in response_json["errors"]:
                             log(f"API Error: {error}")
                     return False
             except json.JSONDecodeError:
-                log("WARNING: Could not parse response as JSON")
+                log("WARNING: Could not parse response as JSON", level="warn")
 
         except Exception as e:
-            log(f"WARNING: Could not read response file: {e}")
+            log(f"WARNING: Could not read response file: {e}", level="warn")
 
         # Fallback: check HTTP code
         success = result.returncode == 0 and http_code == "200"
         if not success:
             if http_code == "400":
-                log("ERROR: HTTP 400 - Bad Request (check token/user key)")
+                log("ERROR: HTTP 400 - Bad Request (check token/user key)", level="error")
             elif http_code == "401":
-                log("ERROR: HTTP 401 - Unauthorized (invalid token)")
+                log("ERROR: HTTP 401 - Unauthorized (invalid token)", level="error")
             elif http_code == "404":
-                log("ERROR: HTTP 404 - User not found")
+                log("ERROR: HTTP 404 - User not found", level="error")
         log(f"Request successful: {success}")
         return success
 
     except subprocess.TimeoutExpired:
-        log("ERROR: Curl request timed out")
+        log("ERROR: Curl request timed out", level="error")
         return False
     except FileNotFoundError:
-        log("ERROR: Curl not found")
+        log("ERROR: Curl not found", level="error")
         return False
     except Exception as e:
-        log(f"ERROR: Exception in send_pushover: {e}")
+        log(f"ERROR: Exception in send_pushover: {e}", level="error")
         return False
     finally:
         # Clean up temp file
@@ -373,7 +386,7 @@ def send_notifications(title: str, message: str, priority: int = 0, cwd: str = "
                 results[name] = future.result(timeout=10)
                 log(f"{name.capitalize()} notification thread completed: {results[name]}")
             except Exception as e:
-                log(f"ERROR: {name} notification thread failed: {e}")
+                log(f"ERROR: {name} notification thread failed: {e}", level="error")
                 results[name] = False
 
     return results
@@ -496,7 +509,7 @@ def main() -> None:
         sys.stdin.reconfigure(encoding='utf-8')
         log(f"Stdin encoding configured: {sys.stdin.encoding}")
     else:
-        log("WARNING: stdin.reconfigure not available (Python < 3.7)")
+        log("WARNING: stdin.reconfigure not available (Python < 3.7)", level="warn")
 
     log(f"Hook script started - Event: Processing")
 
@@ -512,7 +525,7 @@ def main() -> None:
         return
 
     if not stdin_data:
-        log("ERROR: stdin is empty")
+        log("ERROR: stdin is empty", level="error")
         return
 
     log(f"Stdin content: {stdin_data[:200]}...")
@@ -524,7 +537,7 @@ def main() -> None:
         hook_input = json.loads(stdin_data)
         log(f"JSON parsed successfully")
     except json.JSONDecodeError as e:
-        log(f"ERROR: JSON decode failed: {e}")
+        log(f"ERROR: JSON decode failed: {e}", level="error")
         return
 
     hook_event = hook_input.get("hook_event_name", "")
@@ -534,7 +547,7 @@ def main() -> None:
     log(f"Event: {hook_event}, Session: {session_id}, CWD: {cwd}")
 
     if not session_id:
-        log("ERROR: No session_id in input")
+        log("ERROR: No session_id in input", level="error")
         return
 
     if hook_event == "UserPromptSubmit":
@@ -613,7 +626,7 @@ def main() -> None:
 
         log(f"Message stats: chars={len(message)}, bytes={len(message.encode('utf-8'))}")
     else:
-        log(f"WARNING: Unknown hook event type: {hook_event}")
+        log(f"WARNING: Unknown hook event type: {hook_event}", level="warn")
 
     log(f"Hook script completed")
     log("=" * 60)
