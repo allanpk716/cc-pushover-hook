@@ -2,6 +2,12 @@
 """
 Cross-platform installer for Claude Code Pushover notification hook.
 
+This intelligent installer supports multiple installation scenarios:
+- Fresh install: New installation with no existing configuration
+- Migration: Upgrade from old flat structure to new subdirectory structure
+- Upgrade: Backup and upgrade existing installation
+- Merge: Merge Pushover hooks into existing settings.json
+
 Usage:
     python install.py [OPTIONS]
 
@@ -11,15 +17,28 @@ Options:
     --non-interactive        Non-interactive mode, don't ask for confirmation
     --skip-diagnostics       Skip post-install diagnostics
     --quiet                  Quiet mode, reduce output
+    --timeout SECONDS        Hook execution timeout in seconds (default: 5)
     --version                Show version information
 
 The script will:
 1. Detect your platform (Windows/Linux/macOS)
 2. Ask for the target project directory (or use --target-dir)
-3. Copy all necessary files
-4. Generate platform-specific settings.json
-5. Guide you through environment variable setup
-6. Run diagnostics to verify installation (unless --skip-diagnostics)
+3. Auto-detect existing installation and determine best action:
+   - Fresh install if no existing configuration
+   - Migrate from old version (flat -> subdirectory) if detected
+   - Backup and upgrade if new version structure exists
+   - Merge to existing settings.json if other hooks present
+4. Copy all necessary files to .claude/hooks/pushover-hook/
+5. Automatically cleanup old files from previous versions
+6. Generate platform-specific settings.json with proper paths
+7. Create VERSION file with installation metadata
+8. Guide you through environment variable setup
+9. Run diagnostics to verify installation (unless --skip-diagnostics)
+
+Version Information:
+- Uses git tags/describe for dynamic versioning
+- Creates VERSION file with version, install time, and git commit
+- Supports upgrade detection and migration between versions
 """
 
 import os
@@ -417,7 +436,7 @@ class Installer:
                 pass
 
             # Create VERSION file content
-            installed_at = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+            installed_at = datetime.now(datetime.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
             version_content = f"version={self.version}\ninstalled_at={installed_at}\ngit_commit={git_commit}\n"
 
             # Write VERSION file

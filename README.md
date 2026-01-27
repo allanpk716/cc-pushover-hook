@@ -54,6 +54,56 @@ python install.py
 python .claude/hooks/pushover-hook/test-pushover.py
 ```
 
+### 智能安装模式
+
+安装脚本会自动检测项目状态并选择最合适的安装方式：
+
+| 检测到的状态 | 安装动作 | 说明 |
+|------------|---------|------|
+| 全新项目（无配置） | Fresh Install | 创建完整的 Pushover hook 配置 |
+| 旧版本结构（扁平目录） | Migration | 自动迁移到新的子目录结构，保留现有配置 |
+| 新版本结构（已安装） | Merge | 智能合并配置，替换旧 hook，保留其他 hook |
+| 仅存在 settings.json | Merge | 将 Pushover hook 合并到现有配置 |
+
+### 高级安装选项
+
+```bash
+# 非交互模式（适合脚本自动化）
+python install.py --target-dir /path/to/project --non-interactive
+
+# 强制重新安装
+python install.py --force
+
+# 自定义 hook 超时时间（默认 5 秒）
+python install.py --timeout 10
+
+# 跳过安装后诊断
+python install.py --skip-diagnostics
+
+# 静默模式（减少输出）
+python install.py --quiet
+
+# 查看版本信息
+python install.py --version
+```
+
+### 升级说明
+
+如果您已有旧版本安装：
+
+1. **自动迁移**：直接运行 `python install.py`，脚本会自动：
+   - 检测旧版本文件
+   - 备份现有配置
+   - 迁移到新的目录结构
+   - 清理旧文件
+
+2. **版本跟踪**：安装后会在 `.claude/hooks/pushover-hook/VERSION` 记录：
+   - 版本号（来自 git tags）
+   - 安装时间
+   - Git commit hash
+
+3. **配置备份**：每次升级都会备份 settings.json 为 `settings.json.backup_YYYYMMDD_HHMMSS`
+
 ### 环境变量设置
 
 ```bash
@@ -88,10 +138,14 @@ python install.py
 ```
 
 安装脚本会：
+- **智能检测**现有安装状态
+- **自动选择**最合适的安装模式（全新安装/迁移/升级）
 - 检测你的操作系统
 - 询问目标项目路径
-- 复制所有必要文件
-- 生成适合你系统的 settings.json
+- 复制所有必要文件到 `.claude/hooks/pushover-hook/`
+- **自动清理**旧版本的文件
+- **智能合并**配置到 settings.json
+- 生成 VERSION 文件记录安装信息
 - 引导完成环境变量设置
 - 运行诊断验证安装
 
