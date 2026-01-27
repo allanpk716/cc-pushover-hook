@@ -96,6 +96,47 @@ class Installer:
         print(f"[DEBUG] parsed_args.target_dir: {self.parsed_args.target_dir}", file=sys.stderr)
         print(f"[DEBUG] parsed_args.non_interactive: {self.parsed_args.non_interactive}", file=sys.stderr)
 
+    def detect_existing_installation(self) -> dict:
+        """
+        检测目标项目的现有安装状态。
+
+        Returns:
+            包含检测结果的字典:
+            - has_settings: bool - 是否存在 settings.json
+            - has_old_hook: bool - 是否存在旧版本的扁平结构 hook
+            - has_new_hook: bool - 是否存在新版本的子目录 hook
+            - old_version: str|None - 已安装的版本号
+        """
+        settings_path = self.target_dir / ".claude" / "settings.json"
+        hook_dir = self.target_dir / ".claude" / "hooks"
+
+        detection = {
+            "has_settings": settings_path.exists(),
+            "has_old_hook": (hook_dir / "pushover-notify.py").exists(),
+            "has_new_hook": (hook_dir / "pushover-hook" / "pushover-notify.py").exists(),
+            "old_version": self.get_installed_version()
+        }
+
+        return detection
+
+    def get_installed_version(self) -> str:
+        """
+        从 VERSION 文件读取已安装的版本号。
+
+        Returns:
+            版本字符串，如果不存在则返回 None
+        """
+        version_file = self.target_dir / ".claude" / "hooks" / "pushover-hook" / "VERSION"
+        if version_file.exists():
+            try:
+                with open(version_file, 'r', encoding='utf-8') as f:
+                    for line in f:
+                        if line.startswith("version="):
+                            return line.strip().split("=", 1)[1].strip()
+            except Exception:
+                pass
+        return None
+
     def _create_argument_parser(self):
         """Create command line argument parser."""
         parser = argparse.ArgumentParser(
