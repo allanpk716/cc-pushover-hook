@@ -352,42 +352,16 @@ class Installer:
             sys.exit(1)
 
     def copy_hook_files(self) -> None:
-        """Copy hook script files to target directory and cleanup old files."""
+        """
+        Copy hook script files to target directory and cleanup old files.
+
+        从 hooks/ 目录复制文件到目标目录，然后清理旧版本的文件。
+        """
         self.print_info("\n[Step 3/5] Copying Hook Files")
         self.print_info("-" * 60)
 
-        # Detect old files from previous installation
-        old_hooks_dir = self.target_dir / ".claude" / "hooks"
-        old_files_to_cleanup = [
-            "pushover-notify.py",
-            "test-pushover.py",
-            "diagnose.py",
-            "README.md",
-            "debug.log",
-        ]
-
-        existing_old_files = []
-        for filename in old_files_to_cleanup:
-            old_file = old_hooks_dir / filename
-            if old_file.exists():
-                existing_old_files.append(old_file)
-
-        # Check for __pycache__ directory
-        old_pycache = old_hooks_dir / "__pycache__"
-        if old_pycache.exists() and old_pycache.is_dir():
-            existing_old_files.append(old_pycache)
-
-        # Check for old disable flag files in .claude directory
-        old_claude_dir = self.target_dir / ".claude"
-        old_disable_files = [
-            old_claude_dir / ".no-pushover",
-            old_claude_dir / ".no-windows",
-        ]
-        for disable_file in old_disable_files:
-            if disable_file.exists():
-                existing_old_files.append(disable_file)
-
-        source_hooks_dir = self.script_dir / ".claude" / "hooks" / "pushover-hook"
+        # 从 hooks/ 目录复制（新的目录结构）
+        source_hooks_dir = self.script_dir / "hooks"
 
         files_to_copy = [
             "pushover-notify.py",
@@ -428,20 +402,8 @@ class Installer:
             sys.exit(1)
 
         # Cleanup old files after successful copy
-        if copied > 0 and existing_old_files:
-            self.print_info(f"\n[INFO] Cleaning up {len(existing_old_files)} old file(s)...")
-            for old_file in existing_old_files:
-                try:
-                    if old_file.is_dir():
-                        shutil.rmtree(old_file)
-                    else:
-                        old_file.unlink()
-                    self.print_info(f"[OK] Removed: {old_file.name}")
-                except Exception as e:
-                    self.print_info(f"[WARN] Failed to remove {old_file.name}: {e}")
-                    self.print_info(f"[INFO] Please manually remove: {old_file}")
-        elif copied > 0:
-            self.print_info("\n[INFO] No old files found (fresh install or already cleaned)")
+        if copied > 0:
+            self.cleanup_old_files()
 
     def create_version_file(self) -> None:
         """Create VERSION file with version, install time, and git commit."""
