@@ -419,41 +419,62 @@ class Installer:
             self._cleanup_obsolete_hook_files(files_to_copy)
 
     def create_version_file(self) -> None:
-        """Create VERSION file with version, install time, and git commit."""
+        """
+        Create VERSION file with version, install time, and git commit.
+
+        重要：VERSION 文件对于第三方程序（如 ai-commit-hub）判断更新状态至关重要。
+        如果创建失败，必须抛出异常中断安装流程。
+
+        VERSION 文件格式：
+            version=<version_string>
+            installed_at=<iso8601_timestamp>
+            git_commit=<commit_hash>
+
+        第三方程序通过读取此文件中的 version= 行与远程仓库版本比较来判断是否需要更新。
+        """
+        from datetime import datetime
+
+        # Get git commit hash
+        git_commit = "unknown"
         try:
-            from datetime import datetime
+            result = subprocess.run(
+                ['git', 'rev-parse', 'HEAD'],
+                cwd=self.script_dir,
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                git_commit = result.stdout.strip()
+        except (subprocess.TimeoutExpired, FileNotFoundError, Exception):
+            # Git commit 失败不影响安装，使用 "unknown" 作为占位符
+            pass
 
-            # Get git commit hash
-            git_commit = "unknown"
-            try:
-                result = subprocess.run(
-                    ['git', 'rev-parse', 'HEAD'],
-                    cwd=self.script_dir,
-                    capture_output=True,
-                    text=True,
-                    timeout=5
-                )
-                if result.returncode == 0 and result.stdout.strip():
-                    git_commit = result.stdout.strip()
-            except (subprocess.TimeoutExpired, FileNotFoundError, Exception):
-                pass
+        # Create VERSION file content
+        installed_at = datetime.now(datetime.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+        version_content = f"version={self.version}\ninstalled_at={installed_at}\ngit_commit={git_commit}\n"
 
-            # Create VERSION file content
-            installed_at = datetime.now(datetime.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
-            version_content = f"version={self.version}\ninstalled_at={installed_at}\ngit_commit={git_commit}\n"
-
-            # Write VERSION file
-            version_file = self.hook_dir / "VERSION"
+        # Write VERSION file - 失败时抛出异常
+        version_file = self.hook_dir / "VERSION"
+        try:
             with open(version_file, 'w', encoding='utf-8') as f:
                 f.write(version_content)
-
-            self.print_info(f"[OK] Created VERSION file")
-            self.print_info(f"[INFO] Version: {self.version}")
-            self.print_info(f"[INFO] Installed at: {installed_at}")
-            self.print_info(f"[INFO] Git commit: {git_commit}")
-
         except Exception as e:
-            self.print_info(f"[WARN] Failed to create VERSION file: {e}")
+            # VERSION 文件创建失败是致命错误，因为它影响第三方程序的版本检测
+            error_msg = f"Failed to create VERSION file: {e}"
+            if self.is_non_interactive():
+                print(json.dumps({
+                    "status": "error",
+                    "message": error_msg
+                }))
+            else:
+                print(f"[ERROR] {error_msg}")
+            raise
+
+        self.print_info(f"[OK] Created VERSION file")
+        self.print_info(f"[INFO] Version: {self.version}")
+        self.print_info(f"[INFO] Installed at: {installed_at}")
+        self.print_info(f"[INFO] Git commit: {git_commit}")
 
     def backup_settings(self, settings_path: Path) -> Path:
         """
