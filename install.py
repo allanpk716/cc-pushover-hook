@@ -451,7 +451,8 @@ class Installer:
             pass
 
         # Create VERSION file content
-        installed_at = datetime.now(datetime.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+        # Use utcnow() for better compatibility with Python < 3.11
+        installed_at = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
         version_content = f"version={self.version}\ninstalled_at={installed_at}\ngit_commit={git_commit}\n"
 
         # Write VERSION file - 失败时抛出异常
