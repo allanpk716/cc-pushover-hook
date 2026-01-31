@@ -419,16 +419,18 @@ class Installer:
             except Exception as e:
                 print(json.dumps({
                     "status": "error",
+                    "code": 5,
                     "message": f"Failed to copy {filename}: {e}"
                 }))
-                sys.exit(1)
+                sys.exit(5)
 
         if copied == 0:
             print(json.dumps({
                 "status": "error",
+                "code": 5,
                 "message": "No files were copied!"
             }))
-            sys.exit(1)
+            sys.exit(5)
 
         # Cleanup old files after successful copy
         if copied > 0:
