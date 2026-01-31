@@ -284,16 +284,23 @@ class Installer:
             target = Path(self.parsed_args.target_dir).resolve()
             if not target.exists():
                 if self.is_non_interactive():
-                    print(json.dumps({
-                        "status": "error",
-                        "message": f"Target directory does not exist: {target}"
-                    }))
-                    sys.exit(1)
-                response = input(f"Directory does not exist: {target}\nCreate it? (y/n): ").lower()
-                if response == 'y':
-                    target.mkdir(parents=True, exist_ok=True)
+                    # 静默模式：自动创建目录
+                    try:
+                        target.mkdir(parents=True, exist_ok=True)
+                    except Exception as e:
+                        print(json.dumps({
+                            "status": "error",
+                            "code": 2,
+                            "message": f"Cannot create directory: {e}"
+                        }))
+                        sys.exit(2)
                 else:
-                    sys.exit(1)
+                    # 交互模式：询问用户
+                    response = input(f"Directory does not exist: {target}\nCreate it? (y/n): ").lower()
+                    if response == 'y':
+                        target.mkdir(parents=True, exist_ok=True)
+                    else:
+                        sys.exit(1)
 
             # Check if writable
             test_file = target / ".write_test"
