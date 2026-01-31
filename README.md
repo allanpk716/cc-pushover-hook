@@ -87,6 +87,18 @@ python install.py --quiet
 python install.py --version
 ```
 
+### 快速集成（第三方项目）
+
+如果你想在其他项目中自动集成 Pushover Hook，请参考：
+
+📘 **[完整集成指南](INTEGRATION.md)** - 静默安装、命令行参数、Python 调用示例
+
+**快速开始：**
+```bash
+# 静默重装到指定项目
+python install.py --target-dir "/path/to/project" --reinstall
+```
+
 ### 升级说明
 
 如果您已有旧版本安装：
