@@ -4,3 +4,6 @@ nul
 *.log
 .claude/
 .no-pushover
+
+# Git worktrees
+.worktrees/
