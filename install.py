@@ -103,6 +103,12 @@ class Installer:
         self.parser = self._create_argument_parser()
         self.parsed_args = self.parser.parse_args(args)
 
+        # Handle --reinstall shortcut
+        if self.parsed_args.reinstall:
+            self.parsed_args.force = True
+            self.parsed_args.non_interactive = True
+            self.parsed_args.quiet = True
+
         # Set version after script_dir is initialized
         self.version = self.get_version_from_git()
 
@@ -228,6 +234,11 @@ class Installer:
             type=int,
             default=15,
             help="Hook execution timeout in seconds (default: 15)"
+        )
+        parser.add_argument(
+            "--reinstall",
+            action="store_true",
+            help="Silent reinstall (equivalent to --force --non-interactive --quiet)"
         )
         parser.add_argument(
             "--version",
