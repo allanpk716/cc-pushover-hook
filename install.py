@@ -957,6 +957,15 @@ class Installer:
         env_status["has_user"] = bool(os.environ.get("PUSHOVER_USER"))
         env_status["pushover_configured"] = env_status["has_token"] and env_status["has_user"]
 
+        # 静默模式下 Python 不可用应立即失败
+        if self.is_non_interactive() and not env_status["python_available"]:
+            print(json.dumps({
+                "status": "error",
+                "code": 3,
+                "message": "Python not available on this system"
+            }))
+            sys.exit(3)
+
         return env_status
 
     def _check_burnttoast(self, python_cmd: str) -> bool:
