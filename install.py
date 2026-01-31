@@ -514,8 +514,18 @@ class Installer:
             self.print_info(f"     {backup_path.name}")
             return backup_path
         except Exception as e:
-            self.print_info(f"[WARN] Failed to backup settings.json: {e}")
-            return None
+            if self.is_non_interactive():
+                # 静默模式：备份失败是致命错误
+                print(json.dumps({
+                    "status": "error",
+                    "code": 4,
+                    "message": f"Failed to backup settings.json: {e}"
+                }))
+                sys.exit(4)
+            else:
+                # 交互模式：仅警告
+                self.print_info(f"[WARN] Failed to backup settings.json: {e}")
+                return None
 
     def cleanup_old_files(self) -> None:
         """
