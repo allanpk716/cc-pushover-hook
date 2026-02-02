@@ -423,7 +423,9 @@ def summarize_conversation(session_id: str, cwd: str) -> str:
     log(f"summarize_conversation called for session {session_id}")
 
     cache_dir = Path(cwd) / ".claude" / "cache"
-    cache_file = cache_dir / f"session-{session_id}.jsonl"
+    pid = os.getpid()
+    cache_file = cache_dir / f"session-{session_id}-pid-{pid}.jsonl"
+    log(f"Cache file for PID {pid}: {cache_file}")
 
     # Fallback: extract last user message
     fallback_summary = "Task completed"
