@@ -111,6 +111,53 @@ def cleanup_old_logs(log_dir: Path, keep_days: int = 5) -> None:
         pass
 
 
+def cleanup_expired_cache(cache_dir: Path, keep_days: int = 7) -> None:
+    """
+    Clean up cache files older than keep_days days.
+
+    Args:
+        cache_dir: Directory containing session cache files
+        keep_days: Number of days to keep cache files (default: 7)
+
+    Cleans:
+        - session-*-pid-*.jsonl files older than keep_days
+        - Uses file modification time (st_mtime) for age detection
+
+    Note:
+        Silently fails on errors to avoid breaking the hook
+    """
+    if not cache_dir.exists():
+        log("Cache directory does not exist, skipping cleanup")
+        return
+
+    try:
+        cutoff_time = datetime.now() - timedelta(days=keep_days)
+        cleaned_count = 0
+
+        # Find all cache files matching the new naming pattern
+        for cache_file in cache_dir.glob("session-*-pid-*.jsonl"):
+            try:
+                # Check file modification time
+                file_mtime = datetime.fromtimestamp(cache_file.stat().st_mtime)
+
+                if file_mtime < cutoff_time:
+                    cache_file.unlink(missing_ok=True)
+                    log(f"Cleaned expired cache: {cache_file.name}")
+                    cleaned_count += 1
+
+            except Exception as e:
+                log(f"Error cleaning cache file {cache_file.name}: {e}", level="error")
+
+        if cleaned_count > 0:
+            log(f"Cache cleanup completed: {cleaned_count} expired file(s) removed")
+        else:
+            log("No expired cache files to clean")
+
+    except Exception as e:
+        # Silently fail - cleanup should never break the hook
+        log(f"Error during cache cleanup: {e}", level="error")
+
+
 def is_notification_disabled(cwd: str) -> bool:
     """
     Check if notifications are disabled for the current project.
@@ -575,10 +622,20 @@ def main() -> None:
 
     elif hook_event == "Stop":
         log("Processing Stop event")
+
+        # Get cache file path for this session
+        pid = os.getpid()
+        cache_file = Path(cwd) / ".claude" / "cache" / f"session-{session_id}-pid-{pid}.jsonl"
+
+        # Handle edge case: Stop before UserPromptSubmit
+        if not cache_file.exists():
+            log(f"No cache file found for session {session_id} (PID {pid})")
+            summary = "Task completed (no user messages recorded)"
+        else:
+            summary = summarize_conversation(session_id, cwd)
+
         # Send task completion notification
         project_name = get_project_name(cwd)
-        summary = summarize_conversation(session_id, cwd)
-
         title = f"[{project_name}] Task Complete"
         message = f"Session: {session_id}\\nSummary: {summary}"
 
@@ -588,14 +645,22 @@ def main() -> None:
 
         log(f"Message stats: chars={len(message)}, bytes={len(message.encode('utf-8'))}")
 
-        # Clean up cache with PID isolation
-        pid = os.getpid()
-        cache_file = Path(cwd) / ".claude" / "cache" / f"session-{session_id}-pid-{pid}.jsonl"
+        # Mark session as completed instead of deleting
         try:
-            cache_file.unlink(missing_ok=True)
-            log(f"Cache file cleaned up: {cache_file}")
-        except OSError as e:
-            log(f"ERROR cleaning up cache: {e}")
+            completed_entry = {
+                "type": "session_complete",
+                "timestamp": datetime.utcnow().isoformat(),
+                "pid": pid
+            }
+            with open(cache_file, "a", encoding="utf-8") as f:
+                f.write(json.dumps(completed_entry) + "\n")
+            log(f"Session marked as completed: {cache_file}")
+        except (OSError, IOError) as e:
+            log(f"WARNING: Failed to mark session as completed: {e}", level="warn")
+
+        # Clean up expired cache (7 days)
+        cache_dir = Path(cwd) / ".claude" / "cache"
+        cleanup_expired_cache(cache_dir, keep_days=7)
 
     elif hook_event == "Notification":
         log("Processing Notification event")
