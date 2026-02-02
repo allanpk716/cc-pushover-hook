@@ -552,17 +552,19 @@ def main() -> None:
 
     if hook_event == "UserPromptSubmit":
         log("Processing UserPromptSubmit event")
-        # Record user input to cache
+        # Record user input to cache with PID isolation
         cache_dir = Path(cwd) / ".claude" / "cache"
         cache_dir.mkdir(parents=True, exist_ok=True)
 
-        cache_file = cache_dir / f"session-{session_id}.jsonl"
+        pid = os.getpid()
+        cache_file = cache_dir / f"session-{session_id}-pid-{pid}.jsonl"
 
         try:
             entry = {
                 "type": "user_prompt_submit",
                 "prompt": hook_input.get("prompt", ""),
                 "timestamp": hook_input.get("timestamp", ""),
+                "pid": pid,
             }
 
             with open(cache_file, "a", encoding="utf-8") as f:
@@ -586,8 +588,9 @@ def main() -> None:
 
         log(f"Message stats: chars={len(message)}, bytes={len(message.encode('utf-8'))}")
 
-        # Clean up cache
-        cache_file = Path(cwd) / ".claude" / "cache" / f"session-{session_id}.jsonl"
+        # Clean up cache with PID isolation
+        pid = os.getpid()
+        cache_file = Path(cwd) / ".claude" / "cache" / f"session-{session_id}-pid-{pid}.jsonl"
         try:
             cache_file.unlink(missing_ok=True)
             log(f"Cache file cleaned up: {cache_file}")
