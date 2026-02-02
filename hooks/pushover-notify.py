@@ -24,11 +24,27 @@ from concurrent.futures import ThreadPoolExecutor
 DEBUG_MODE = os.environ.get("PUSHOVER_DEBUG", "").lower() in ("1", "true", "yes", "on")
 
 
+# ORIGINAL VERSION (before PID isolation):
+# def get_log_path() -> Path:
+#     """Get the debug log file path with daily rotation."""
+#     script_dir = Path(__file__).parent
+#     today = datetime.now().strftime("%Y-%m-%d")
+#     return script_dir / f"debug.{today}.log"
+
 def get_log_path() -> Path:
-    """Get the debug log file path with daily rotation."""
+    """
+    Get the debug log file path with daily rotation and per-instance isolation.
+
+    Each Claude Code instance (identified by PID) gets its own log file
+    to prevent concurrent write conflicts in multi-instance scenarios.
+
+    Returns:
+        Path object for the log file: debug.YYYY-MM-DD-pid-{pid}.log
+    """
     script_dir = Path(__file__).parent
     today = datetime.now().strftime("%Y-%m-%d")
-    return script_dir / f"debug.{today}.log"
+    pid = os.getpid()
+    return script_dir / f"debug.{today}-pid-{pid}.log"
 
 
 def log(message: str, level: str = "info") -> None:
@@ -55,8 +71,10 @@ def cleanup_old_logs(log_dir: Path, keep_days: int = 5) -> None:
     """
     Clean up old log files older than keep_days.
 
-    Only processes files matching debug.YYYY-MM-DD.log pattern.
-    Keeps today's log and up to keep_days of historical logs.
+    Processes files matching both formats:
+    - debug.YYYY-MM-DD.log (legacy)
+    - debug.YYYY-MM-DD-pid-PID.log (multi-instance)
+    Keeps today's logs and up to keep_days of historical logs.
 
     Args:
         log_dir: Directory containing log files
@@ -68,7 +86,8 @@ def cleanup_old_logs(log_dir: Path, keep_days: int = 5) -> None:
     try:
         today = datetime.now().date()
         cutoff_date = today - timedelta(days=keep_days)
-        log_pattern = re.compile(r'debug\.(\d{4}-\d{2}-\d{2})\.log')
+        # Match both legacy and new PID-based formats
+        log_pattern = re.compile(r'debug\.(\d{4}-\d{2}-\d{2})(?:-pid-\d+)?\.log')
 
         for log_file in log_dir.glob("debug*.log"):
             # Extract date from filename
